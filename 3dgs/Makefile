@@ -19,7 +19,10 @@ PLY         := $(MODEL)/point_cloud/iteration_$(ITERATIONS)/point_cloud.ply
 SPLAT_OUT   := output/output_$(TIMESTAMP).splat
 PLY_OUT     := output/output_$(TIMESTAMP).ply
 
-.PHONY: splat clean deps
+VIEWER_DIR  := ../viewer_overlays
+VIEWER_PID  := /tmp/viewer.pid
+
+.PHONY: splat clean deps viewer viewer-stop
 
 # Full pipeline
 splat: $(PLY)
@@ -54,6 +57,24 @@ $(PLY): $(SPARSE_DIR)
 		--save_iterations $(ITERATIONS) \
 		--disable_viewer
 	@echo "Training complete — $(PLY)"
+
+# Viewer server
+viewer:
+	@if [ -f $(VIEWER_PID) ] && kill -0 $$(cat $(VIEWER_PID)) 2>/dev/null; then \
+		echo "Viewer already running (PID $$(cat $(VIEWER_PID)))"; \
+	else \
+		cd $(VIEWER_DIR) && nohup bun run src/dev.ts > /tmp/viewer.log 2>&1 & echo $$! > $(VIEWER_PID); \
+		echo "Viewer started (PID $$(cat $(VIEWER_PID))), log: /tmp/viewer.log"; \
+	fi
+
+viewer-stop:
+	@if [ -f $(VIEWER_PID) ] && kill -0 $$(cat $(VIEWER_PID)) 2>/dev/null; then \
+		kill $$(cat $(VIEWER_PID)) && rm -f $(VIEWER_PID); \
+		echo "Viewer stopped"; \
+	else \
+		echo "Viewer not running"; \
+		rm -f $(VIEWER_PID); \
+	fi
 
 clean:
 	rm -rf $(SCENE) $(MODEL)

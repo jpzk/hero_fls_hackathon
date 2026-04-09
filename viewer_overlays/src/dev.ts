@@ -13,11 +13,9 @@ import { join, relative, resolve, basename } from "path";
 import { spawn, type Subprocess } from "bun";
 
 const PORT = parseInt(process.env.PORT || "3001", 10);
-const SPLAT_DIR = resolve(process.env.SPLAT_DIR || "/root/splatting/3dgs/output");
-const PIPELINE_DIR = resolve(process.env.PIPELINE_DIR || "/root/splatting/3dgs");
+const SPLAT_DIR = resolve(process.env.SPLAT_DIR || "/workspace/splatting/3dgs/output");
+const PIPELINE_DIR = resolve(process.env.PIPELINE_DIR || "/workspace/splatting/3dgs");
 const API_PROXY = process.env.API_PROXY || ""; // e.g. "http://103.196.86.242:3002"
-
-// --- Bundle ---
 
 let bundledJs = "";
 
