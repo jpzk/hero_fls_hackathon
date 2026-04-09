@@ -6,6 +6,7 @@ SCENE       := data/better_pov
 MODEL       := output/better_pov
 ITERATIONS  := 30000
 FPS         := 6
+TIMESTAMP   := $(shell date +%H%M)
 
 # CUDA + headless COLMAP
 export PATH := /usr/local/cuda/bin:$(PATH)
@@ -15,12 +16,16 @@ export QT_QPA_PLATFORM := offscreen
 FRAMES_DIR  := $(SCENE)/input
 SPARSE_DIR  := $(SCENE)/sparse/0
 PLY         := $(MODEL)/point_cloud/iteration_$(ITERATIONS)/point_cloud.ply
-SPLAT       := output/better_pov.splat
+SPLAT_OUT   := output/output_$(TIMESTAMP).splat
+PLY_OUT     := output/output_$(TIMESTAMP).ply
 
 .PHONY: splat clean deps
 
 # Full pipeline
-splat: $(SPLAT)
+splat: $(PLY)
+	cp $(PLY) $(PLY_OUT)
+	python ply_to_splat.py $(PLY) $(SPLAT_OUT)
+	@echo "Done: $(SPLAT_OUT) + $(PLY_OUT)"
 
 # Step 0: Install CUDA submodules if needed
 deps:
@@ -49,11 +54,6 @@ $(PLY): $(SPARSE_DIR)
 		--save_iterations $(ITERATIONS) \
 		--disable_viewer
 	@echo "Training complete — $(PLY)"
-
-# Step 4: Convert .ply to .splat
-$(SPLAT): $(PLY)
-	python ply_to_splat.py $(PLY) $(SPLAT)
-	@echo "Done: $(SPLAT)"
 
 clean:
 	rm -rf $(SCENE) $(MODEL)
