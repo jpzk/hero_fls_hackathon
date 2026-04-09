@@ -126,6 +126,16 @@ def train(
     cameras, points3d, colors3d = load_colmap_scene(model_dir, image_dir)
     print(f"Loaded {len(cameras)} cameras, {len(points3d)} points")
 
+    # Preload all images to GPU and precompute camera tensors
+    print("Preloading images to GPU...")
+    gt_images = []
+    viewmats = []
+    Ks = []
+    for cam in cameras:
+        gt_images.append(cam.load_image().to(device))
+        viewmats.append(torch.tensor(cam.world_to_camera, dtype=torch.float32, device=device))
+        Ks.append(torch.tensor(cam.K, dtype=torch.float32, device=device))
+
     # Compute scene extent for scale-aware densification
     scene_center = points3d.mean(axis=0)
     scene_extent = np.linalg.norm(points3d - scene_center, axis=1).max()
@@ -158,17 +168,19 @@ def train(
     active_sh_degree = 0
     l1_loss = nn.L1Loss()
 
+    # Precompute SSIM window (reused every iteration)
+    ssim_window = _make_ssim_window(window_size=11, channels=3, device=device)
+
     pbar = tqdm(range(1, config.iterations + 1), desc="Training")
     for step in pbar:
         # Random camera
         cam_idx = np.random.randint(len(cameras))
-        cam = cameras[cam_idx]
-        gt_image = cam.load_image().to(device)
+        gt_image = gt_images[cam_idx]
         H, W = gt_image.shape[:2]
 
-        # Build camera matrices
-        viewmat = torch.tensor(cam.world_to_camera, dtype=torch.float32, device=device)
-        K = torch.tensor(cam.K, dtype=torch.float32, device=device)
+        # Use precomputed camera matrices
+        viewmat = viewmats[cam_idx]
+        K = Ks[cam_idx]
 
         if use_gsplat:
             renders, alphas, info = rasterization(
@@ -193,7 +205,7 @@ def train(
         # Loss: L1 + SSIM
         loss = (1 - config.ssim_weight) * l1_loss(rendered, gt_image)
         if config.ssim_weight > 0:
-            loss = loss + config.ssim_weight * (1 - ssim(rendered, gt_image))
+            loss = loss + config.ssim_weight * (1 - ssim(rendered, gt_image, window=ssim_window))
 
         loss.backward()
 
@@ -248,8 +260,8 @@ def train(
                 sh_deg=active_sh_degree,
             )
 
-        # Checkpoint every 1000 steps
-        if step % 1000 == 0:
+        # Checkpoint at 25%, 50%, 75% of training
+        if step in (config.iterations // 4, config.iterations // 2, config.iterations * 3 // 4):
             ckpt_path = str(Path(output_path).parent / f"checkpoint_{step}.ply")
             save_ply(model, ckpt_path)
             print(f"\nCheckpoint saved: {ckpt_path} ({model.num_gaussians} gaussians)")
@@ -397,22 +409,26 @@ def fallback_render(model, viewmat, K, W, H, active_sh_degree):
     return image
 
 
-def ssim(img1, img2, window_size=11):
-    """Compute SSIM between two images [H,W,3] using local gaussian window."""
-    # Convert HWC to NCHW for conv2d
+def _make_ssim_window(window_size: int = 11, channels: int = 3, device: str = "cuda"):
+    """Create gaussian window for SSIM (call once, reuse every iteration)."""
+    sigma = 1.5
+    coords = torch.arange(window_size, dtype=torch.float32, device=device) - window_size // 2
+    gauss = torch.exp(-coords ** 2 / (2 * sigma ** 2))
+    gauss = gauss / gauss.sum()
+    window_2d = gauss.unsqueeze(1) @ gauss.unsqueeze(0)
+    return window_2d.unsqueeze(0).unsqueeze(0).expand(channels, 1, -1, -1).contiguous()
+
+
+def ssim(img1, img2, window=None, window_size=11):
+    """Compute SSIM between two images [H,W,3]. Pass precomputed window for speed."""
     img1 = img1.permute(2, 0, 1).unsqueeze(0)
     img2 = img2.permute(2, 0, 1).unsqueeze(0)
     C = img1.shape[1]
 
-    # Gaussian window
-    sigma = 1.5
-    coords = torch.arange(window_size, dtype=img1.dtype, device=img1.device) - window_size // 2
-    gauss = torch.exp(-coords ** 2 / (2 * sigma ** 2))
-    gauss = gauss / gauss.sum()
-    window_2d = gauss.unsqueeze(1) @ gauss.unsqueeze(0)
-    window = window_2d.unsqueeze(0).unsqueeze(0).expand(C, 1, -1, -1)
+    if window is None:
+        window = _make_ssim_window(window_size, C, img1.device)
 
-    pad = window_size // 2
+    pad = window.shape[-1] // 2
     mu1 = torch.nn.functional.conv2d(img1, window, padding=pad, groups=C)
     mu2 = torch.nn.functional.conv2d(img2, window, padding=pad, groups=C)
     mu1_sq, mu2_sq = mu1 ** 2, mu2 ** 2

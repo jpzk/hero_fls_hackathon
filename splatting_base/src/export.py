@@ -1,6 +1,5 @@
 """Export trained .ply to .splat format for the web viewer."""
 
-import struct
 from pathlib import Path
 
 import numpy as np
@@ -53,20 +52,33 @@ def ply_to_splat(ply_path: str, splat_path: str):
     scale_mag = sx * sy * sz
     order = np.argsort(-scale_mag)
 
+    # Apply sort order once
+    x, y, z = x[order], y[order], z[order]
+    sx, sy, sz = sx[order], sy[order], sz[order]
+    r, g, b, a = r[order], g[order], b[order], a[order]
+    rw, rx, ry, rz = rw[order], rx[order], ry[order], rz[order]
+
+    # Build output buffer (32 bytes per gaussian) using structured numpy array
+    dtype = np.dtype([
+        ("px", "<f4"), ("py", "<f4"), ("pz", "<f4"),
+        ("sx", "<f4"), ("sy", "<f4"), ("sz", "<f4"),
+        ("r", "u1"), ("g", "u1"), ("b", "u1"), ("a", "u1"),
+        ("qw", "u1"), ("qx", "u1"), ("qy", "u1"), ("qz", "u1"),
+    ])
+    buf = np.empty(n, dtype=dtype)
+    buf["px"] = x; buf["py"] = y; buf["pz"] = z
+    buf["sx"] = sx; buf["sy"] = sy; buf["sz"] = sz
+    buf["r"] = np.clip(r * 255, 0, 255).astype(np.uint8)
+    buf["g"] = np.clip(g * 255, 0, 255).astype(np.uint8)
+    buf["b"] = np.clip(b * 255, 0, 255).astype(np.uint8)
+    buf["a"] = np.clip(a * 255, 0, 255).astype(np.uint8)
+    buf["qw"] = np.clip(rw * 128 + 128, 0, 255).astype(np.uint8)
+    buf["qx"] = np.clip(rx * 128 + 128, 0, 255).astype(np.uint8)
+    buf["qy"] = np.clip(ry * 128 + 128, 0, 255).astype(np.uint8)
+    buf["qz"] = np.clip(rz * 128 + 128, 0, 255).astype(np.uint8)
+
     out = Path(splat_path)
     out.parent.mkdir(parents=True, exist_ok=True)
-
-    clamp = lambda v: max(0, min(255, int(v)))
-
-    with open(out, "wb") as f:
-        for i in order:
-            f.write(struct.pack("<fff", x[i], y[i], z[i]))
-            f.write(struct.pack("<fff", sx[i], sy[i], sz[i]))
-            f.write(struct.pack("<BBBB",
-                clamp(r[i] * 255), clamp(g[i] * 255),
-                clamp(b[i] * 255), clamp(a[i] * 255)))
-            f.write(struct.pack("<BBBB",
-                clamp(rw[i] * 128 + 128), clamp(rx[i] * 128 + 128),
-                clamp(ry[i] * 128 + 128), clamp(rz[i] * 128 + 128)))
+    buf.tofile(str(out))
 
     print(f"Exported {n} gaussians to {out} ({out.stat().st_size / 1024 / 1024:.1f} MB)")
