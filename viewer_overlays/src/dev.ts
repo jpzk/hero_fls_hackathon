@@ -16,6 +16,7 @@ const PORT = parseInt(process.env.PORT || "3001", 10);
 const SPLAT_DIR = resolve(process.env.SPLAT_DIR || "/root/splatting/3dgs/output");
 const PIPELINE_DIR = resolve(process.env.PIPELINE_DIR || "/root/splatting/3dgs");
 const API_PROXY = process.env.API_PROXY || ""; // e.g. "http://103.196.86.242:3002"
+const DETECT_SERVER = process.env.DETECT_SERVER || "http://localhost:8100"; // Python YOLO server
 
 // --- Bundle ---
 
@@ -306,6 +307,40 @@ const server = Bun.serve({
   async fetch(req, server) {
     const url = new URL(req.url);
     const path = url.pathname;
+
+    // --- Detect objects: always route to local Python server, even in proxy mode ---
+    if (path === "/api/detect" && req.method === "OPTIONS") {
+      return new Response(null, {
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type",
+        },
+      });
+    }
+    if (path === "/api/detect" && req.method === "POST") {
+      try {
+        const body = await req.text();
+        const detectResp = await fetch(`${DETECT_SERVER}/api/detect`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body,
+        });
+        const result = await detectResp.text();
+        return new Response(result, {
+          status: detectResp.status,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+          },
+        });
+      } catch (e: any) {
+        return Response.json(
+          { error: `Detection server unavailable: ${e.message}` },
+          { status: 502, headers: { "Access-Control-Allow-Origin": "*" } },
+        );
+      }
+    }
 
     // --- Proxy mode: forward API/WS/splats to remote server ---
     if (API_PROXY) {

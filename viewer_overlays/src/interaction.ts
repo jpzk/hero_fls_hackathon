@@ -254,6 +254,64 @@ function mat4Invert(m: Float32Array): Float32Array {
   return out;
 }
 
+export function raySplatPick(
+  ray: Ray,
+  positions: Float32Array,
+  count: number,
+  maxDist: number = 0.15,
+): [number, number, number] | null {
+  let bestDistSq = maxDist * maxDist;
+  let bestIdx = -1;
+
+  for (let i = 0; i < count; i++) {
+    const px = positions[i * 3];
+    const py = positions[i * 3 + 1];
+    const pz = positions[i * 3 + 2];
+
+    // Vector from ray origin to point
+    const dx = px - ray.origin[0];
+    const dy = py - ray.origin[1];
+    const dz = pz - ray.origin[2];
+
+    // Project onto ray direction
+    const t = dx * ray.dir[0] + dy * ray.dir[1] + dz * ray.dir[2];
+    if (t < 0) continue; // Behind camera
+
+    // Perpendicular distance squared
+    const cx = ray.origin[0] + ray.dir[0] * t - px;
+    const cy = ray.origin[1] + ray.dir[1] * t - py;
+    const cz = ray.origin[2] + ray.dir[2] * t - pz;
+    const distSq = cx * cx + cy * cy + cz * cz;
+
+    if (distSq < bestDistSq) {
+      bestDistSq = distSq;
+      bestIdx = i;
+    }
+  }
+
+  if (bestIdx < 0) return null;
+  return [
+    positions[bestIdx * 3],
+    positions[bestIdx * 3 + 1],
+    positions[bestIdx * 3 + 2],
+  ];
+}
+
+export function worldToScreen(
+  point: [number, number, number],
+  viewMatrix: Float32Array,
+  projMatrix: Float32Array,
+  width: number,
+  height: number,
+): [number, number] | null {
+  const vp = mat4Mul(projMatrix, viewMatrix);
+  const clip = transformPoint(vp, point);
+  // clip is already divided by w from transformPoint
+  const x = (clip[0] * 0.5 + 0.5) * width;
+  const y = (1 - (clip[1] * 0.5 + 0.5)) * height;
+  return [x, y];
+}
+
 function transformPoint(mat: Float32Array, p: [number, number, number]): [number, number, number] {
   const w = mat[3] * p[0] + mat[7] * p[1] + mat[11] * p[2] + mat[15];
   return [

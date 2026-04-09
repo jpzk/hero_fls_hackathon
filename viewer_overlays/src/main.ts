@@ -7,8 +7,8 @@
 
 import { SplatRenderer } from "./renderer";
 import { detectAndLoad, analyzeSplatData, repairSplatData, type SplatData } from "./loader";
-import type { Overlay } from "./overlays";
-import { screenToRay, pickOverlay, rayBoxFace, beginDrag, updateDrag, type DragState } from "./interaction";
+import type { Overlay, OverlayBox } from "./overlays";
+import { screenToRay, pickOverlay, rayBoxFace, beginDrag, updateDrag, raySplatPick, worldToScreen, type DragState } from "./interaction";
 
 let renderer: SplatRenderer;
 let dragState: DragState | null = null;
@@ -22,12 +22,35 @@ let drawerOpen = true;
 let heatmapMode = 0;
 const heatmapModes = ["Off", "Alpha", "Scale"];
 
+// Detection state
+interface Detection {
+  class: string;
+  confidence: number;
+  center: [number, number, number];
+  size: [number, number, number];
+  color: [number, number, number, number];
+  suggestion: { item: string; range: string };
+}
+
+let detections: Detection[] = [];
+let detectionOverlayStart = -1; // index in overlays array where detection boxes start
+let sceneCenter: [number, number, number] = [0, 0, 0];
+let sceneRadius = 1;
+
+// Measure mode state
+let measureMode = false;
+let measurePoints: [number, number, number][] = [];
+let measureOverlayStart = -1;
+let splatPositions: Float32Array | null = null;
+let splatCount = 0;
+
 function init() {
   const canvas = document.getElementById("canvas") as HTMLCanvasElement;
   renderer = new SplatRenderer(canvas);
 
   function frame() {
     renderer.render();
+    updateMeasureLabel();
     frameCount++;
     const now = performance.now();
     if (now - lastFpsTime > 1000) {
@@ -82,6 +105,11 @@ function init() {
       return;
     }
 
+    if (measureMode) {
+      canvas.style.cursor = "crosshair";
+      return;
+    }
+
     const sel = renderer.overlayRenderer.selectedIndex;
     if (sel >= 0) {
       const rect = canvas.getBoundingClientRect();
@@ -118,15 +146,40 @@ function init() {
       const x = (e.clientX - rect.left) * dpr;
       const y = (e.clientY - rect.top) * dpr;
       const ray = screenToRay(x, y, canvas.width, canvas.height, renderer.camera);
+
+      // Measure mode: pick splat point
+      if (measureMode && splatPositions) {
+        const pickRadius = sceneRadius * 0.03;
+        const point = raySplatPick(ray, splatPositions, splatCount, pickRadius);
+        if (point) {
+          handleMeasureClick(point);
+        } else {
+          showToast("No surface found — try clicking on a visible area", "warning");
+        }
+        return;
+      }
+
       const idx = pickOverlay(renderer.overlayRenderer.overlays, ray);
       renderer.overlayRenderer.selectedIndex = idx;
+
+      // Show detection panel if a detection overlay was clicked
+      if (idx >= 0 && detectionOverlayStart >= 0 && idx >= detectionOverlayStart) {
+        const detIdx = idx - detectionOverlayStart;
+        showDetectionPanel(detIdx);
+      } else {
+        hideDetectionPanel();
+      }
     }
   });
 
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
+      if (measureMode) {
+        exitMeasureMode();
+      }
       renderer.overlayRenderer.selectedIndex = -1;
-      canvas.style.cursor = "grab";
+      canvas.style.cursor = measureMode ? "crosshair" : "grab";
+      hideDetectionPanel();
     }
   });
 }
@@ -197,6 +250,24 @@ function setupToolbar() {
     });
   }
 
+  // Measure button
+  document.getElementById("tb-measure")!.addEventListener("click", () => {
+    if (stats.gaussians > 0) {
+      toggleMeasureMode();
+    } else {
+      showToast("Load a splat file first", "warning");
+    }
+  });
+
+  // Detect button
+  document.getElementById("tb-detect")!.addEventListener("click", () => {
+    if (stats.gaussians > 0) {
+      runDetection();
+    } else {
+      showToast("Load a splat file first", "warning");
+    }
+  });
+
   // Heatmap cycle
   const heatBtn = document.getElementById("tb-heatmap")!;
   const heatLabel = document.getElementById("tb-heatmap-label")!;
@@ -211,6 +282,138 @@ function setupToolbar() {
   document.getElementById("tb-drawer")!.addEventListener("click", () => {
     setDrawerOpen(!drawerOpen);
   });
+
+  // Detection panel close
+  document.getElementById("detect-panel-close")!.addEventListener("click", () => {
+    hideDetectionPanel();
+    renderer.overlayRenderer.selectedIndex = -1;
+  });
+}
+
+// ─── Object Detection ───
+
+async function captureCurrentView(): Promise<{ image: string; viewMatrix: number[]; projMatrix: number[] }[]> {
+  const canvas = renderer.camera['canvas'] as HTMLCanvasElement;
+  const cam = renderer.camera;
+
+  // Render current frame
+  renderer.render();
+
+  // Capture what the user is looking at
+  const image = canvas.toDataURL("image/png").split(",")[1];
+  const aspect = canvas.width / canvas.height;
+  const viewMatrix = Array.from(cam.getViewMatrix());
+  const projMatrix = Array.from(cam.getProjectionMatrix(aspect));
+
+  return [{ image, viewMatrix, projMatrix }];
+}
+
+async function runDetection() {
+  const detectBtn = document.getElementById("tb-detect")!;
+
+  // Already detecting?
+  if (detectBtn.classList.contains("detecting")) return;
+
+  detectBtn.classList.remove("detected");
+  detectBtn.classList.add("detecting");
+
+  try {
+    const frames = await captureCurrentView();
+
+    showToast("Running AI detection...", "info");
+    const resp = await fetch("/api/detect", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        frames,
+        sceneCenter: Array.from(sceneCenter),
+        sceneRadius,
+      }),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ error: "Server error" }));
+      throw new Error(err.error || `HTTP ${resp.status}`);
+    }
+
+    const result = await resp.json();
+    detections = result.detections || [];
+
+    // Add detection overlays
+    addDetectionOverlays();
+
+    detectBtn.classList.remove("detecting");
+    if (detections.length > 0) {
+      detectBtn.classList.add("detected");
+      // Add badge
+      let badge = detectBtn.querySelector(".detect-badge") as HTMLElement;
+      if (!badge) {
+        badge = document.createElement("span");
+        badge.className = "detect-badge";
+        detectBtn.appendChild(badge);
+      }
+      badge.textContent = String(detections.length);
+      badge.classList.add("visible");
+
+      showToast(`Detected ${detections.length} object${detections.length > 1 ? "s" : ""}`, "info");
+    } else {
+      showToast("No objects detected", "info");
+    }
+  } catch (e: any) {
+    detectBtn.classList.remove("detecting");
+    showToast(`Detection failed: ${e.message}`, "warning");
+    console.error("Detection error:", e);
+  }
+}
+
+function addDetectionOverlays() {
+  // Remove old detection overlays if any
+  if (detectionOverlayStart >= 0) {
+    renderer.overlayRenderer.overlays.splice(detectionOverlayStart);
+  }
+
+  detectionOverlayStart = renderer.overlayRenderer.overlays.length;
+
+  for (const det of detections) {
+    const halfExtents: [number, number, number] = [
+      det.size[0] / 2,
+      det.size[1] / 2,
+      det.size[2] / 2,
+    ];
+
+    const box: OverlayBox = {
+      type: "box",
+      center: det.center as [number, number, number],
+      halfExtents,
+      color: det.color as [number, number, number, number],
+    };
+
+    renderer.overlayRenderer.overlays.push(box);
+  }
+
+  // Update _allOverlays cache if it exists
+  if ((renderer as any)._allOverlays) {
+    (renderer as any)._allOverlays = [...renderer.overlayRenderer.overlays];
+  }
+}
+
+function showDetectionPanel(detectionIndex: number) {
+  const det = detections[detectionIndex];
+  if (!det) return;
+
+  const panel = document.getElementById("detect-panel")!;
+  document.getElementById("detect-panel-class")!.textContent = det.class;
+  document.getElementById("detect-panel-conf")!.textContent = `${(det.confidence * 100).toFixed(0)}%`;
+  document.getElementById("detect-panel-dims")!.textContent =
+    `${det.size[0].toFixed(2)} × ${det.size[1].toFixed(2)} × ${det.size[2].toFixed(2)} m`;
+  document.getElementById("detect-panel-item")!.textContent = det.suggestion.item;
+  document.getElementById("detect-panel-range")!.textContent = det.suggestion.range;
+
+  panel.classList.add("visible");
+}
+
+function hideDetectionPanel() {
+  document.getElementById("detect-panel")!.classList.remove("visible");
 }
 
 function setupTrainToggle() {
@@ -264,6 +467,8 @@ function loadFile(buffer: ArrayBuffer, filename: string) {
       }
 
       renderer.loadSplatData(data);
+      splatPositions = data.positions;
+      splatCount = data.count;
       stats.gaussians = data.count;
       statusEl.style.display = "none";
       updateStats();
@@ -295,6 +500,21 @@ function addSceneOverlays(data: SplatData) {
   const hx = (maxX - minX) / 2;
   const hy = (maxY - minY) / 2;
   const hz = (maxZ - minZ) / 2;
+
+  // Store scene info for detection
+  sceneCenter = [cx, cy, cz];
+  sceneRadius = Math.max(hx, hy, hz);
+
+  // Reset detection state
+  detections = [];
+  detectionOverlayStart = -1;
+  hideDetectionPanel();
+  const detectBtn = document.getElementById("tb-detect");
+  if (detectBtn) {
+    detectBtn.classList.remove("detected", "detecting");
+    const badge = detectBtn.querySelector(".detect-badge");
+    if (badge) badge.classList.remove("visible");
+  }
 
   const overlays: Overlay[] = [
     {
@@ -715,6 +935,160 @@ async function checkUrlParam() {
       statusEl.textContent = `Failed to load: ${e.message}`;
     }
   }
+}
+
+// ─── Measure Mode ───
+
+function toggleMeasureMode() {
+  if (measureMode) {
+    exitMeasureMode();
+  } else {
+    enterMeasureMode();
+  }
+}
+
+function enterMeasureMode() {
+  measureMode = true;
+  measurePoints = [];
+  clearMeasureOverlays();
+
+  const canvas = document.getElementById("canvas") as HTMLCanvasElement;
+  canvas.style.cursor = "crosshair";
+
+  const btn = document.getElementById("tb-measure")!;
+  btn.classList.add("active");
+
+  showToast("Measure mode: click two points to measure distance", "info");
+}
+
+function exitMeasureMode() {
+  measureMode = false;
+  measurePoints = [];
+  clearMeasureOverlays();
+
+  const canvas = document.getElementById("canvas") as HTMLCanvasElement;
+  canvas.style.cursor = "grab";
+
+  const btn = document.getElementById("tb-measure")!;
+  btn.classList.remove("active");
+
+  const label = document.getElementById("measure-label")!;
+  label.style.display = "none";
+}
+
+function clearMeasureOverlays() {
+  if (measureOverlayStart >= 0) {
+    // Only remove measure overlays (they are always at the end)
+    const count = renderer.overlayRenderer.overlays.length - measureOverlayStart;
+    if (count > 0) renderer.overlayRenderer.overlays.splice(measureOverlayStart, count);
+    measureOverlayStart = -1;
+  }
+  const label = document.getElementById("measure-label");
+  if (label) label.style.display = "none";
+}
+
+function handleMeasureClick(point: [number, number, number]) {
+  if (measurePoints.length >= 2) {
+    // Reset for new measurement
+    measurePoints = [];
+    clearMeasureOverlays();
+  }
+
+  measurePoints.push(point);
+  updateMeasureOverlays();
+
+  if (measurePoints.length === 2) {
+    const [a, b] = measurePoints;
+    const dist = Math.sqrt(
+      (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2
+    );
+
+    let distStr: string;
+    if (dist < 0.01) {
+      distStr = `${(dist * 1000).toFixed(1)} mm`;
+    } else if (dist < 1) {
+      distStr = `${(dist * 100).toFixed(1)} cm`;
+    } else {
+      distStr = `${dist.toFixed(2)} m`;
+    }
+
+    showToast(`Distance: ${distStr}`, "info");
+  }
+}
+
+function updateMeasureOverlays() {
+  clearMeasureOverlays();
+  measureOverlayStart = renderer.overlayRenderer.overlays.length;
+
+  const pointSize = sceneRadius * 0.02;
+
+  for (const pt of measurePoints) {
+    renderer.overlayRenderer.overlays.push({
+      type: "point",
+      position: pt,
+      color: [1.0, 0.5, 0.0, 1.0],
+      size: pointSize,
+    });
+  }
+
+  if (measurePoints.length === 2) {
+    const [a, b] = measurePoints;
+
+    renderer.overlayRenderer.overlays.push({
+      type: "line",
+      from: a,
+      to: b,
+      color: [1.0, 0.5, 0.0, 1.0],
+    });
+  }
+}
+
+function updateMeasureLabel() {
+  const label = document.getElementById("measure-label")!;
+  if (!measureMode || measurePoints.length < 2) {
+    label.style.display = "none";
+    return;
+  }
+
+  const [a, b] = measurePoints;
+  const mid: [number, number, number] = [
+    (a[0] + b[0]) / 2,
+    (a[1] + b[1]) / 2,
+    (a[2] + b[2]) / 2,
+  ];
+
+  const canvas = document.getElementById("canvas") as HTMLCanvasElement;
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.width;
+  const h = canvas.height;
+  const aspect = w / h;
+
+  const viewMatrix = renderer.camera.getViewMatrix();
+  const projMatrix = renderer.camera.getProjectionMatrix(aspect);
+
+  const screenPos = worldToScreen(mid, viewMatrix, projMatrix, w, h);
+  if (!screenPos) {
+    label.style.display = "none";
+    return;
+  }
+
+  const dist = Math.sqrt(
+    (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2
+  );
+
+  let distStr: string;
+  if (dist < 0.01) {
+    distStr = `${(dist * 1000).toFixed(1)} mm`;
+  } else if (dist < 1) {
+    distStr = `${(dist * 100).toFixed(1)} cm`;
+  } else {
+    distStr = `${dist.toFixed(2)} m`;
+  }
+
+  label.textContent = distStr;
+  label.style.display = "block";
+  label.style.left = `${screenPos[0] / dpr}px`;
+  label.style.top = `${screenPos[1] / dpr - 20}px`;
 }
 
 // Start when DOM is ready

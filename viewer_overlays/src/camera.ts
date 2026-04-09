@@ -152,7 +152,7 @@ export class OrbitCamera {
   /** Auto-frame the camera to fit the scene */
   fitToScene(center: [number, number, number], radius: number) {
     this.target = [...center];
-    this.distance = radius * 2.5;
+    this.distance = radius * 0.8;
   }
 }
 
