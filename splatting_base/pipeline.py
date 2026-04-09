@@ -99,8 +99,11 @@ def main():
         print("\n=== Step 3/4: Training 3D Gaussian Splatting ===")
         from src.train import train, TrainConfig
         config = TrainConfig(iterations=args.iterations)
+        # Use the undistorted sparse model (has correct intrinsics for undistorted images)
+        undistorted_sparse = str(Path(undistorted) / "sparse")
+        train_model_dir = undistorted_sparse if Path(undistorted_sparse).exists() else sparse_model
         image_dir = str(Path(undistorted) / "images") if Path(undistorted, "images").exists() else str(frames_dir)
-        train(sparse_model, image_dir, str(model_path), config)
+        train(train_model_dir, image_dir, str(model_path), config)
     else:
         print("Skipping training")
 

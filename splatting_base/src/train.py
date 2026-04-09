@@ -54,7 +54,7 @@ class GaussianModel(nn.Module):
             )
         )
         self.opacities_raw = nn.Parameter(
-            torch.full((n,), fill_value=0.1, dtype=torch.float32, device=device)
+            torch.full((n,), fill_value=math.log(0.1 / (1 - 0.1)), dtype=torch.float32, device=device)
         )
 
         # SH coefficients: degree 0 only initially
@@ -142,11 +142,10 @@ def train(
     # Position LR schedule: exponential decay
     lr_init = config.lr_position
     lr_final = lr_init * 0.01
-    lr_delay_steps = 0
 
     def update_lr(step):
         t = step / config.iterations
-        lr = lr_final + (lr_init - lr_final) * (1 - t)
+        lr = lr_init * (lr_final / lr_init) ** t
         for pg in optimizer.param_groups:
             if pg["name"] == "means":
                 pg["lr"] = lr
@@ -195,27 +194,29 @@ def train(
 
         with torch.no_grad():
             # Densification
-            if config.densify_from < step < config.densify_until:
-                if use_gsplat and step % config.densify_every == 0:
-                    grads = model.means.grad
-                    if grads is not None:
-                        grad_norms = grads.norm(dim=-1, keepdim=True)
-                        model.xyz_gradient_accum += grad_norms
-                        model.denom += 1
+            if config.densify_from < step < config.densify_until and use_gsplat:
+                # Accumulate gradients at every step
+                grads = model.means.grad
+                if grads is not None:
+                    grad_norms = grads.norm(dim=-1, keepdim=True)
+                    model.xyz_gradient_accum += grad_norms
+                    model.denom += 1
 
-                        avg_grads = model.xyz_gradient_accum / (model.denom + 1e-7)
-                        mask = (avg_grads.squeeze() > config.densify_grad_thresh)
+                # Densify/prune periodically using accumulated gradients
+                if step % config.densify_every == 0:
+                    avg_grads = model.xyz_gradient_accum / (model.denom + 1e-7)
+                    mask = (avg_grads.squeeze() > config.densify_grad_thresh)
 
-                        if mask.any():
-                            densify_and_split(model, optimizer, mask)
+                    if mask.any():
+                        densify_and_split(model, optimizer, mask)
 
-                        # Prune low opacity
-                        prune_mask = (model.opacities < config.prune_opacity_thresh).squeeze()
-                        if prune_mask.any():
-                            prune_gaussians(model, optimizer, ~prune_mask)
+                    # Prune low opacity
+                    prune_mask = (model.opacities < config.prune_opacity_thresh).squeeze()
+                    if prune_mask.any():
+                        prune_gaussians(model, optimizer, ~prune_mask)
 
-                        model.xyz_gradient_accum.zero_()
-                        model.denom.zero_()
+                    model.xyz_gradient_accum.zero_()
+                    model.denom.zero_()
 
             # Opacity reset
             if step % config.opacity_reset_every == 0:
@@ -367,17 +368,33 @@ def fallback_render(model, viewmat, K, W, H, active_sh_degree):
 
 
 def ssim(img1, img2, window_size=11):
-    """Compute SSIM between two images [H,W,3]."""
-    # Simple SSIM approximation
-    mu1 = img1.mean()
-    mu2 = img2.mean()
-    sigma1 = ((img1 - mu1) ** 2).mean()
-    sigma2 = ((img2 - mu2) ** 2).mean()
-    sigma12 = ((img1 - mu1) * (img2 - mu2)).mean()
+    """Compute SSIM between two images [H,W,3] using local gaussian window."""
+    # Convert HWC to NCHW for conv2d
+    img1 = img1.permute(2, 0, 1).unsqueeze(0)
+    img2 = img2.permute(2, 0, 1).unsqueeze(0)
+    C = img1.shape[1]
+
+    # Gaussian window
+    sigma = 1.5
+    coords = torch.arange(window_size, dtype=img1.dtype, device=img1.device) - window_size // 2
+    gauss = torch.exp(-coords ** 2 / (2 * sigma ** 2))
+    gauss = gauss / gauss.sum()
+    window_2d = gauss.unsqueeze(1) @ gauss.unsqueeze(0)
+    window = window_2d.unsqueeze(0).unsqueeze(0).expand(C, 1, -1, -1)
+
+    pad = window_size // 2
+    mu1 = torch.nn.functional.conv2d(img1, window, padding=pad, groups=C)
+    mu2 = torch.nn.functional.conv2d(img2, window, padding=pad, groups=C)
+    mu1_sq, mu2_sq = mu1 ** 2, mu2 ** 2
+    mu1_mu2 = mu1 * mu2
+    sigma1_sq = torch.nn.functional.conv2d(img1 * img1, window, padding=pad, groups=C) - mu1_sq
+    sigma2_sq = torch.nn.functional.conv2d(img2 * img2, window, padding=pad, groups=C) - mu2_sq
+    sigma12 = torch.nn.functional.conv2d(img1 * img2, window, padding=pad, groups=C) - mu1_mu2
+
     C1, C2 = 0.01 ** 2, 0.03 ** 2
-    ssim_val = ((2 * mu1 * mu2 + C1) * (2 * sigma12 + C2)) / \
-               ((mu1 ** 2 + mu2 ** 2 + C1) * (sigma1 + sigma2 + C2))
-    return ssim_val
+    ssim_map = ((2 * mu1_mu2 + C1) * (2 * sigma12 + C2)) / \
+               ((mu1_sq + mu2_sq + C1) * (sigma1_sq + sigma2_sq + C2))
+    return ssim_map.mean()
 
 
 def save_ply(model, path):
