@@ -18,6 +18,61 @@ export interface SplatData {
   rotations: Float32Array;   // 4 * count (quaternion wxyz)
 }
 
+export interface SplatWarnings {
+  constantAlpha: number | null;
+  hugeScaleCount: number;
+  zeroAlphaCount: number;
+}
+
+export function analyzeSplatData(data: SplatData): SplatWarnings {
+  const colors = data.colors;
+  const scales = data.scales;
+  const count = data.count;
+
+  let firstAlpha = colors[3];
+  let allSameAlpha = true;
+  let hugeScaleCount = 0;
+  let zeroAlphaCount = 0;
+
+  for (let i = 0; i < count; i++) {
+    const a = colors[i * 4 + 3];
+    if (a !== firstAlpha) allSameAlpha = false;
+    if (a === 0) zeroAlphaCount++;
+
+    const sx = scales[i * 3];
+    const sy = scales[i * 3 + 1];
+    const sz = scales[i * 3 + 2];
+    if (Math.max(Math.abs(sx), Math.abs(sy), Math.abs(sz)) > 10) hugeScaleCount++;
+  }
+
+  return {
+    constantAlpha: allSameAlpha ? firstAlpha : null,
+    hugeScaleCount,
+    zeroAlphaCount,
+  };
+}
+
+export function repairSplatData(data: SplatData, warnings: SplatWarnings): void {
+  const count = data.count;
+
+  if (warnings.constantAlpha !== null && warnings.constantAlpha < 10) {
+    for (let i = 0; i < count; i++) {
+      data.colors[i * 4 + 3] = 200;
+    }
+  }
+
+  if (warnings.hugeScaleCount > 0) {
+    for (let i = 0; i < count; i++) {
+      for (let c = 0; c < 3; c++) {
+        const idx = i * 3 + c;
+        if (Math.abs(data.scales[idx]) > 5) {
+          data.scales[idx] = Math.sign(data.scales[idx]) * 5;
+        }
+      }
+    }
+  }
+}
+
 export function loadSplat(buffer: ArrayBuffer): SplatData {
   const count = buffer.byteLength / 32;
   const f32 = new Float32Array(buffer);

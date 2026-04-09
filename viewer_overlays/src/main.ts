@@ -6,7 +6,7 @@
  */
 
 import { SplatRenderer } from "./renderer";
-import { detectAndLoad, type SplatData } from "./loader";
+import { detectAndLoad, analyzeSplatData, repairSplatData, type SplatData } from "./loader";
 import type { Overlay } from "./overlays";
 
 let renderer: SplatRenderer;
@@ -42,6 +42,19 @@ function init() {
   checkUrlParam();
 }
 
+function showToast(message: string, type: "warning" | "info" = "info") {
+  const toast = document.createElement("div");
+  toast.className = `toast toast-${type}`;
+  toast.textContent = message;
+  toast.style.whiteSpace = "pre-line";
+  document.body.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add("show"));
+  setTimeout(() => {
+    toast.classList.remove("show");
+    setTimeout(() => toast.remove(), 300);
+  }, 5000);
+}
+
 function loadFile(buffer: ArrayBuffer, filename: string) {
   const overlay = document.getElementById("overlay")!;
   overlay.style.display = "none";
@@ -53,6 +66,24 @@ function loadFile(buffer: ArrayBuffer, filename: string) {
   setTimeout(() => {
     try {
       const data = detectAndLoad(buffer, filename);
+
+      const warnings = analyzeSplatData(data);
+      const msgs: string[] = [];
+      if (warnings.constantAlpha !== null && warnings.constantAlpha < 10) {
+        msgs.push(`All alpha = ${warnings.constantAlpha}/255 — boosted to 200`);
+      }
+      if (warnings.hugeScaleCount > 0) {
+        msgs.push(`${warnings.hugeScaleCount} splats with scale > 10 — clamped to 5`);
+      }
+      if (warnings.zeroAlphaCount > 0) {
+        msgs.push(`${warnings.zeroAlphaCount} splats with zero alpha`);
+      }
+
+      if (msgs.length > 0) {
+        repairSplatData(data, warnings);
+        showToast("Auto-repaired:\n" + msgs.join("\n"), "warning");
+      }
+
       renderer.loadSplatData(data);
       stats.gaussians = data.count;
       statusEl.style.display = "none";
