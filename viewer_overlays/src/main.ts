@@ -123,6 +123,7 @@ function init() {
     }
   });
 
+  setupTraining();
   checkUrlParam();
   loadFileList();
 }
@@ -387,6 +388,247 @@ function setupFilePicker() {
       };
       input.click();
     });
+  }
+}
+
+// --- Training UI ---
+
+interface TrainingJob {
+  status: "idle" | "running" | "completed" | "failed";
+  stage: "uploading" | "frames" | "colmap" | "training" | "export";
+  iteration: number;
+  totalIterations: number;
+  loss: number;
+  startedAt: number | null;
+  logs: string[];
+  outputFile: string | null;
+  config: { iterations: number; fps: number };
+  error: string | null;
+}
+
+let selectedVideo: File | null = null;
+let ws: WebSocket | null = null;
+let trainingStartTime: number | null = null;
+
+const STAGES = ["frames", "colmap", "training", "export"] as const;
+
+function setupTraining() {
+  const uploadArea = document.getElementById("train-upload")!;
+  const fileInput = document.getElementById("train-file-input") as HTMLInputElement;
+  const filenameEl = document.getElementById("train-filename")!;
+  const trainBtn = document.getElementById("train-btn") as HTMLButtonElement;
+
+  uploadArea.addEventListener("click", () => fileInput.click());
+  uploadArea.addEventListener("dragover", (e) => { e.preventDefault(); e.stopPropagation(); });
+  uploadArea.addEventListener("drop", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const file = (e as DragEvent).dataTransfer?.files[0];
+    if (file && /\.(mp4|mov|avi|mkv)$/i.test(file.name)) {
+      selectVideo(file);
+    }
+  });
+
+  fileInput.addEventListener("change", () => {
+    if (fileInput.files?.[0]) selectVideo(fileInput.files[0]);
+  });
+
+  function selectVideo(file: File) {
+    selectedVideo = file;
+    uploadArea.classList.add("has-file");
+    filenameEl.textContent = `${file.name} (${formatSize(file.size)})`;
+    trainBtn.disabled = false;
+  }
+
+  trainBtn.addEventListener("click", startTraining);
+
+  const loadResultBtn = document.getElementById("load-result-btn")!;
+  loadResultBtn.addEventListener("click", () => {
+    const outputFile = loadResultBtn.dataset.outputFile;
+    if (outputFile) loadFromServer(outputFile, outputFile.split("/").pop() || "output.splat");
+  });
+
+  // Check for existing job on page load
+  checkTrainingStatus();
+}
+
+async function startTraining() {
+  if (!selectedVideo) return;
+
+  const trainBtn = document.getElementById("train-btn") as HTMLButtonElement;
+  trainBtn.disabled = true;
+  trainBtn.textContent = "Uploading...";
+
+  const iterations = parseInt((document.getElementById("train-iterations") as HTMLInputElement).value) || 30000;
+  const fps = parseInt((document.getElementById("train-fps") as HTMLInputElement).value) || 6;
+
+  const formData = new FormData();
+  formData.append("video", selectedVideo);
+  formData.append("iterations", String(iterations));
+  formData.append("fps", String(fps));
+
+  try {
+    const resp = await fetch("/api/train", { method: "POST", body: formData });
+    if (!resp.ok) {
+      const err = await resp.json();
+      showToast(err.error || "Failed to start training", "warning");
+      trainBtn.disabled = false;
+      trainBtn.textContent = "Start Training";
+      return;
+    }
+
+    trainBtn.textContent = "Training...";
+    trainingStartTime = Date.now();
+    showProgressUI();
+    connectWebSocket();
+  } catch (e: any) {
+    showToast(`Upload failed: ${e.message}`, "warning");
+    trainBtn.disabled = false;
+    trainBtn.textContent = "Start Training";
+  }
+}
+
+async function checkTrainingStatus() {
+  try {
+    const resp = await fetch("/api/status");
+    if (!resp.ok) return;
+    const job: TrainingJob = await resp.json();
+    if (job.status === "running" || job.status === "completed" || job.status === "failed") {
+      trainingStartTime = job.startedAt;
+      showProgressUI();
+      updateProgressUI(job);
+      if (job.status === "running") {
+        const trainBtn = document.getElementById("train-btn") as HTMLButtonElement;
+        trainBtn.disabled = true;
+        trainBtn.textContent = "Training...";
+        connectWebSocket();
+      }
+    }
+  } catch {}
+}
+
+function connectWebSocket() {
+  if (ws && ws.readyState <= 1) return;
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  ws = new WebSocket(`${proto}//${location.host}/ws`);
+  ws.onmessage = (e) => {
+    const job: TrainingJob = JSON.parse(e.data);
+    updateProgressUI(job);
+  };
+  ws.onclose = () => {
+    // Reconnect if job might still be running
+    setTimeout(() => {
+      checkTrainingStatus();
+    }, 2000);
+  };
+}
+
+function showProgressUI() {
+  const el = document.getElementById("training-progress")!;
+  el.style.display = "block";
+}
+
+function updateProgressUI(job: TrainingJob) {
+  // Update stage dots
+  const stageOrder = STAGES;
+  const currentIdx = stageOrder.indexOf(job.stage);
+
+  for (let i = 0; i < stageOrder.length; i++) {
+    const stage = stageOrder[i];
+    const dot = document.querySelector(`.stage-dot[data-stage="${stage}"]`) as HTMLElement;
+    const label = document.querySelector(`.stage-label[data-stage="${stage}"]`) as HTMLElement;
+    if (!dot || !label) continue;
+
+    dot.classList.remove("active", "done");
+    label.classList.remove("active", "done");
+
+    if (job.status === "completed") {
+      dot.classList.add("done");
+      label.classList.add("done");
+      dot.textContent = "\u2713";
+    } else if (i < currentIdx) {
+      dot.classList.add("done");
+      label.classList.add("done");
+      dot.textContent = "\u2713";
+    } else if (i === currentIdx && job.status === "running") {
+      dot.classList.add("active");
+      label.classList.add("active");
+    }
+  }
+
+  // Progress bar
+  const bar = document.getElementById("progress-bar")!;
+  const iterEl = document.getElementById("progress-iter")!;
+  const lossEl = document.getElementById("progress-loss")!;
+  const etaEl = document.getElementById("progress-eta")!;
+
+  if (job.stage === "training" && job.totalIterations > 0) {
+    const pct = Math.min(100, (job.iteration / job.totalIterations) * 100);
+    bar.style.width = `${pct}%`;
+    iterEl.textContent = `${job.iteration.toLocaleString()} / ${job.totalIterations.toLocaleString()}`;
+    lossEl.textContent = job.loss > 0 ? `Loss: ${job.loss.toFixed(5)}` : "";
+
+    // ETA
+    if (job.startedAt && job.iteration > 0) {
+      const elapsed = (Date.now() - job.startedAt) / 1000;
+      const iterPerSec = job.iteration / elapsed;
+      const remaining = (job.totalIterations - job.iteration) / iterPerSec;
+      if (remaining > 60) {
+        etaEl.textContent = `~${Math.ceil(remaining / 60)} min left`;
+      } else {
+        etaEl.textContent = `~${Math.ceil(remaining)}s left`;
+      }
+    }
+  } else if (job.status === "completed") {
+    bar.style.width = "100%";
+    iterEl.textContent = "Complete!";
+    lossEl.textContent = job.loss > 0 ? `Final loss: ${job.loss.toFixed(5)}` : "";
+    etaEl.textContent = "";
+  } else {
+    // Non-training stages: indeterminate
+    const stageNames: Record<string, string> = {
+      frames: "Extracting frames...",
+      colmap: "Running COLMAP (this takes a while)...",
+      training: "Starting training...",
+      export: "Exporting .splat...",
+      uploading: "Uploading...",
+    };
+    iterEl.textContent = stageNames[job.stage] || "Processing...";
+    lossEl.textContent = "";
+    etaEl.textContent = "";
+    bar.style.width = "0%";
+  }
+
+  // Logs
+  const logEl = document.getElementById("train-log")!;
+  logEl.textContent = job.logs.slice(-20).join("\n");
+  logEl.scrollTop = logEl.scrollHeight;
+
+  // Error
+  const errorEl = document.getElementById("train-error")!;
+  if (job.status === "failed" && job.error) {
+    errorEl.textContent = job.error;
+    errorEl.style.display = "block";
+  } else {
+    errorEl.style.display = "none";
+  }
+
+  // Load result button
+  const loadBtn = document.getElementById("load-result-btn")!;
+  if (job.status === "completed" && job.outputFile) {
+    loadBtn.style.display = "block";
+    loadBtn.dataset.outputFile = job.outputFile;
+    // Refresh file list
+    loadFileList();
+  } else {
+    loadBtn.style.display = "none";
+  }
+
+  // Re-enable train button on completion/failure
+  if (job.status === "completed" || job.status === "failed") {
+    const trainBtn = document.getElementById("train-btn") as HTMLButtonElement;
+    trainBtn.disabled = false;
+    trainBtn.textContent = "Start Training";
   }
 }
 

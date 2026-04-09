@@ -282,6 +282,232 @@
       font-size: 0.85em;
       margin: 16px 0 4px;
     }
+
+    /* --- Training UI --- */
+    .train-section {
+      margin-top: 24px;
+      width: 100%;
+      max-width: 400px;
+      text-align: left;
+    }
+
+    .train-header {
+      font-size: 0.8em;
+      font-weight: 600;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 10px;
+    }
+
+    .train-upload-area {
+      border: 2px dashed rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      margin-bottom: 12px;
+    }
+    .train-upload-area:hover {
+      border-color: rgba(80, 120, 255, 0.4);
+      background: rgba(80, 120, 255, 0.05);
+    }
+    .train-upload-area.has-file {
+      border-color: rgba(80, 200, 120, 0.4);
+      background: rgba(80, 200, 120, 0.05);
+    }
+    .train-upload-label {
+      font-size: 0.85em;
+      color: #777;
+    }
+    .train-upload-filename {
+      font-size: 0.85em;
+      color: #8fc98f;
+      margin-top: 4px;
+    }
+
+    .train-config {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .train-config label {
+      flex: 1;
+      font-size: 0.8em;
+      color: #888;
+    }
+    .train-config input {
+      display: block;
+      width: 100%;
+      margin-top: 4px;
+      padding: 6px 10px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 6px;
+      color: #ddd;
+      font-size: 0.9em;
+      font-variant-numeric: tabular-nums;
+    }
+    .train-config input:focus {
+      outline: none;
+      border-color: rgba(80, 120, 255, 0.5);
+    }
+
+    #train-btn {
+      width: 100%;
+      padding: 10px;
+      background: rgba(80, 120, 255, 0.2);
+      border: 1px solid rgba(80, 120, 255, 0.4);
+      color: #7aa2ff;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.9em;
+      font-weight: 500;
+      transition: background 0.2s;
+    }
+    #train-btn:hover:not(:disabled) {
+      background: rgba(80, 120, 255, 0.35);
+    }
+    #train-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    /* --- Progress UI --- */
+    #training-progress {
+      display: none;
+      margin-top: 20px;
+      width: 100%;
+      max-width: 400px;
+    }
+
+    .stage-indicator {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      position: relative;
+    }
+    .stage-indicator::before {
+      content: '';
+      position: absolute;
+      top: 12px;
+      left: 24px;
+      right: 24px;
+      height: 2px;
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .stage-step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      z-index: 1;
+    }
+    .stage-dot {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.08);
+      border: 2px solid rgba(255, 255, 255, 0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.65em;
+      color: #555;
+      transition: all 0.3s;
+    }
+    .stage-dot.active {
+      background: rgba(80, 120, 255, 0.3);
+      border-color: #5078ff;
+      color: #7aa2ff;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    .stage-dot.done {
+      background: rgba(80, 200, 120, 0.3);
+      border-color: #50c878;
+      color: #8fc98f;
+    }
+    .stage-label {
+      font-size: 0.7em;
+      color: #555;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .stage-label.active { color: #7aa2ff; }
+    .stage-label.done { color: #8fc98f; }
+
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(80, 120, 255, 0.3); }
+      50% { box-shadow: 0 0 0 6px rgba(80, 120, 255, 0); }
+    }
+
+    .progress-bar-wrap {
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 6px;
+      height: 8px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #5078ff, #50c878);
+      border-radius: 6px;
+      transition: width 0.3s ease;
+      width: 0%;
+    }
+
+    .progress-stats {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.78em;
+      color: #888;
+      font-variant-numeric: tabular-nums;
+      margin-bottom: 12px;
+    }
+
+    .train-log {
+      max-height: 120px;
+      overflow-y: auto;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 0.72em;
+      line-height: 1.5;
+      color: #777;
+      margin-bottom: 12px;
+    }
+    .train-log::-webkit-scrollbar { width: 4px; }
+    .train-log::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+    #load-result-btn {
+      display: none;
+      width: 100%;
+      padding: 10px;
+      background: rgba(80, 200, 120, 0.2);
+      border: 1px solid rgba(80, 200, 120, 0.4);
+      color: #8fc98f;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.9em;
+      font-weight: 500;
+      transition: background 0.2s;
+    }
+    #load-result-btn:hover {
+      background: rgba(80, 200, 120, 0.35);
+    }
+
+    .train-error {
+      padding: 10px;
+      background: rgba(255, 80, 80, 0.1);
+      border: 1px solid rgba(255, 80, 80, 0.3);
+      border-radius: 6px;
+      color: #f66;
+      font-size: 0.82em;
+    }
   </style>
 </head>
 <body>
@@ -292,6 +518,59 @@
       <h1>Gaussian Splat Viewer</h1>
       <p>Drop a .ply or .splat file here</p>
       <button id="file-btn">Choose File</button>
+
+      <div class="train-section">
+        <div class="or-divider">or train a new model</div>
+        <div class="train-header">Upload Video</div>
+        <div id="train-upload" class="train-upload-area">
+          <div class="train-upload-label">Drop a video or click to select</div>
+          <div id="train-filename" class="train-upload-filename"></div>
+          <input type="file" id="train-file-input" accept=".mp4,.mov,.avi,.mkv" hidden>
+        </div>
+        <div class="train-config">
+          <label>
+            Iterations
+            <input type="number" id="train-iterations" value="30000" min="1000" max="100000" step="1000">
+          </label>
+          <label>
+            FPS
+            <input type="number" id="train-fps" value="6" min="1" max="30" step="1">
+          </label>
+        </div>
+        <button id="train-btn" disabled>Start Training</button>
+      </div>
+
+      <div id="training-progress">
+        <div class="stage-indicator">
+          <div class="stage-step">
+            <div class="stage-dot" data-stage="frames">1</div>
+            <div class="stage-label" data-stage="frames">Frames</div>
+          </div>
+          <div class="stage-step">
+            <div class="stage-dot" data-stage="colmap">2</div>
+            <div class="stage-label" data-stage="colmap">COLMAP</div>
+          </div>
+          <div class="stage-step">
+            <div class="stage-dot" data-stage="training">3</div>
+            <div class="stage-label" data-stage="training">Training</div>
+          </div>
+          <div class="stage-step">
+            <div class="stage-dot" data-stage="export">4</div>
+            <div class="stage-label" data-stage="export">Export</div>
+          </div>
+        </div>
+        <div class="progress-bar-wrap">
+          <div id="progress-bar" class="progress-bar-fill"></div>
+        </div>
+        <div class="progress-stats">
+          <span id="progress-iter">Waiting...</span>
+          <span id="progress-loss"></span>
+          <span id="progress-eta"></span>
+        </div>
+        <div id="train-log" class="train-log"></div>
+        <div id="train-error" class="train-error" style="display:none"></div>
+        <button id="load-result-btn">Load Result in Viewer</button>
+      </div>
 
       <div class="file-browser">
         <div class="or-divider">or load from server</div>
