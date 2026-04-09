@@ -13,6 +13,7 @@ See `splatting_base/CLAUDE.md` for pipeline architecture, commands, and key deta
 
 - Host: `root@103.196.86.242` (SSH port 19620)
 - SSH: `ssh root@103.196.86.242 -p 19620 -i ~/.ssh/id_ed25519`
-- Repo: `/opt/splatting`
+- Repo: `/root/splatting`
 - Deploy key: `~/.ssh/splatting_deploy_key` (read-only)
-- Pull: `cd /opt/splatting && git pull`
+- Pull: `cd /root/splatting && git pull`
+- **NEVER delete or `rm -rf` the `output/` folder on production** — it contains previous training results. Output files use `output_HHMM.{ply,splat}` naming to avoid overwriting.

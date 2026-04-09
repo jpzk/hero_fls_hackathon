@@ -50,8 +50,8 @@ def ply_to_splat(ply_path: str, splat_path: str):
 
     # Filter out oversized or near-invisible gaussians
     max_scale = np.maximum(sx, np.maximum(sy, sz))
-    scale_thresh = np.percentile(max_scale, 99) * 3  # adaptive threshold
-    keep = (max_scale < scale_thresh) & (a > 5 / 255)
+    scale_thresh = np.percentile(max_scale, 99) * 2  # adaptive threshold
+    keep = (max_scale < scale_thresh) & (a > 50 / 255)
     n_removed = n - keep.sum()
     if n_removed > 0:
         print(f"Filtered {n_removed} outlier gaussians (oversized or invisible)")

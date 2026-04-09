@@ -14,6 +14,7 @@ Steps:
 import argparse
 import shutil
 import sys
+from datetime import datetime
 from pathlib import Path
 
 
@@ -66,10 +67,11 @@ def main():
     out = Path(args.output)
     out.mkdir(parents=True, exist_ok=True)
 
+    timestamp = datetime.now().strftime("%H%M")
     frames_dir = out / "frames"
     colmap_ws = out / "colmap"
-    model_path = out / "point_cloud.ply"
-    splat_path = out / "point_cloud.splat"
+    model_path = out / f"output_{timestamp}.ply"
+    splat_path = out / f"output_{timestamp}.splat"
 
     # Step 1: Extract frames
     if not args.skip_frames:

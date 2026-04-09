@@ -12,6 +12,24 @@ from PIL import Image
 from tqdm import tqdm
 
 
+def build_rotation(quats):
+    """Convert quaternions (N, 4) [w,x,y,z] to rotation matrices (N, 3, 3)."""
+    norm = torch.sqrt((quats * quats).sum(dim=-1, keepdim=True))
+    q = quats / norm
+    w, x, y, z = q[:, 0], q[:, 1], q[:, 2], q[:, 3]
+    R = torch.zeros((q.shape[0], 3, 3), device=quats.device)
+    R[:, 0, 0] = 1 - 2 * (y*y + z*z)
+    R[:, 0, 1] = 2 * (x*y - w*z)
+    R[:, 0, 2] = 2 * (x*z + w*y)
+    R[:, 1, 0] = 2 * (x*y + w*z)
+    R[:, 1, 1] = 1 - 2 * (x*x + z*z)
+    R[:, 1, 2] = 2 * (y*z - w*x)
+    R[:, 2, 0] = 2 * (x*z - w*y)
+    R[:, 2, 1] = 2 * (y*z + w*x)
+    R[:, 2, 2] = 1 - 2 * (x*x + y*y)
+    return R
+
+
 @dataclass
 class TrainConfig:
     iterations: int = 30_000
@@ -25,7 +43,7 @@ class TrainConfig:
     densify_every: int = 100
     densify_grad_thresh: float = 0.0002
     opacity_reset_every: int = 3000
-    prune_opacity_thresh: float = 0.005
+    prune_opacity_thresh: float = 0.01
     sh_degree: int = 3
     sh_degree_interval: int = 1000
     ssim_weight: float = 0.2
@@ -45,8 +63,13 @@ class GaussianModel(nn.Module):
         self.device = device
 
         self.means = nn.Parameter(torch.tensor(points, dtype=torch.float32, device=device))
+        # KNN-based scale initialization: initial scale = distance to nearest neighbor
+        pts = torch.tensor(points, dtype=torch.float32, device=device)
+        dists = torch.cdist(pts, pts)
+        dists.fill_diagonal_(float('inf'))
+        nn_dist = dists.min(dim=1).values.clamp(min=1e-7)
         self.scales = nn.Parameter(
-            torch.full((n, 3), fill_value=-3.0, dtype=torch.float32, device=device)
+            torch.log(nn_dist).unsqueeze(-1).repeat(1, 3)
         )
         self.quats = nn.Parameter(
             torch.tensor(
@@ -145,17 +168,18 @@ def train(
     model = GaussianModel(points3d, colors3d, device=device)
 
     # Optimizers - separate learning rates per parameter group
+    # Position LR scaled by scene extent (matching reference impl)
     optimizer = torch.optim.Adam([
-        {"params": [model.means], "lr": config.lr_position, "name": "means"},
+        {"params": [model.means], "lr": config.lr_position * scene_extent, "name": "means"},
         {"params": [model.sh_dc], "lr": config.lr_feature, "name": "sh_dc"},
         {"params": [model.sh_rest], "lr": config.lr_feature / 20.0, "name": "sh_rest"},
         {"params": [model.opacities_raw], "lr": config.lr_opacity, "name": "opacity"},
         {"params": [model.scales], "lr": config.lr_scaling, "name": "scaling"},
         {"params": [model.quats], "lr": config.lr_rotation, "name": "rotation"},
-    ])
+    ], eps=1e-15)
 
-    # Position LR schedule: exponential decay
-    lr_init = config.lr_position
+    # Position LR schedule: exponential decay, scaled by scene extent
+    lr_init = config.lr_position * scene_extent
     lr_final = lr_init * 0.01
 
     def update_lr(step):
@@ -182,6 +206,8 @@ def train(
         viewmat = viewmats[cam_idx]
         K = Ks[cam_idx]
 
+        means2d = None
+        radii_info = None
         if use_gsplat:
             renders, alphas, info = rasterization(
                 means=model.means,
@@ -197,6 +223,11 @@ def train(
                 packed=False,
             )
             rendered = renders[0]
+            # Track 2D means for viewspace gradient accumulation
+            means2d = info.get("means2d", None)
+            if means2d is not None and means2d.requires_grad:
+                means2d.retain_grad()
+            radii_info = info.get("radii", None)
         else:
             rendered = fallback_render(
                 model, viewmat, K, W, H, active_sh_degree
@@ -212,12 +243,30 @@ def train(
         with torch.no_grad():
             # Densification
             if config.densify_from < step < config.densify_until and use_gsplat:
-                # Accumulate gradients at every step
-                grads = model.means.grad
-                if grads is not None:
-                    grad_norms = grads.norm(dim=-1, keepdim=True)
-                    model.xyz_gradient_accum += grad_norms
-                    model.denom += 1
+                # Track max screen-space radii for pruning
+                if radii_info is not None:
+                    radii_flat = radii_info[0]  # remove batch dim
+                    visible = radii_flat > 0
+                    model.max_radii2d[visible] = torch.max(
+                        model.max_radii2d[visible], radii_flat[visible].float()
+                    )
+
+                # Accumulate 2D viewspace gradients (matching reference impl)
+                if means2d is not None and means2d.grad is not None:
+                    grad_norms = means2d.grad[0].norm(dim=-1, keepdim=True)
+                    if radii_info is not None:
+                        model.xyz_gradient_accum[visible] += grad_norms[visible]
+                        model.denom[visible] += 1
+                    else:
+                        model.xyz_gradient_accum += grad_norms
+                        model.denom += 1
+                else:
+                    # Fallback to 3D gradients if 2D not available
+                    grads = model.means.grad
+                    if grads is not None:
+                        grad_norms = grads.norm(dim=-1, keepdim=True)
+                        model.xyz_gradient_accum += grad_norms
+                        model.denom += 1
 
                 # Densify/prune periodically using accumulated gradients
                 if step % config.densify_every == 0:
@@ -227,23 +276,30 @@ def train(
                     if mask.any():
                         densify(model, optimizer, mask, scene_extent)
 
-                    # Prune low opacity or oversized gaussians
+                    # Prune low opacity, oversized, or screen-bloated gaussians
                     max_scales = model.scales_activated.max(dim=-1).values
                     prune_mask = (
                         (model.opacities < config.prune_opacity_thresh).squeeze()
                         | (max_scales > scene_extent * 0.1)
                     )
+                    if step > config.opacity_reset_every:
+                        prune_mask = prune_mask | (model.max_radii2d > 20)
                     if prune_mask.any():
                         prune_gaussians(model, optimizer, ~prune_mask)
 
                     model.xyz_gradient_accum.zero_()
                     model.denom.zero_()
 
-            # Opacity reset (only during densification, never at final step)
+            # Opacity reset: cap at 0.01, preserve lower values, reset Adam state
             if step % config.opacity_reset_every == 0 and step < config.densify_until:
-                model.opacities_raw.data.fill_(
-                    math.log(0.01 / (1 - 0.01))  # inverse sigmoid of 0.01
-                )
+                clamped = torch.min(model.opacities, torch.ones_like(model.opacities) * 0.01)
+                model.opacities_raw.data.copy_(torch.log(clamped / (1 - clamped)))
+                for group in optimizer.param_groups:
+                    if group["name"] == "opacity":
+                        param = group["params"][0]
+                        if param in optimizer.state:
+                            optimizer.state[param]["exp_avg"].zero_()
+                            optimizer.state[param]["exp_avg_sq"].zero_()
 
             update_lr(step)
             optimizer.step()
@@ -287,12 +343,17 @@ def densify(model, optimizer, grad_mask, scene_extent):
 
     all_new = []
 
-    # Split: remove originals, add 2 smaller copies with position noise
+    # Split: remove originals, add 2 smaller copies with rotation-aware noise
     if split_mask.any():
         means = model.means.data[split_mask]
         stds = model.scales_activated.data[split_mask]
+        n_split = means.shape[0]
+        # Sample noise in local frame, then rotate to world frame
+        samples = torch.randn(n_split * 2, 3, device=model.device) * stds.repeat(2, 1)
+        rots = build_rotation(model.quats.data[split_mask]).repeat(2, 1, 1)
+        rotated_samples = torch.bmm(rots, samples.unsqueeze(-1)).squeeze(-1)
         all_new.append({
-            "means": means.repeat(2, 1) + torch.randn(means.shape[0] * 2, 3, device=model.device) * stds.repeat(2, 1),
+            "means": means.repeat(2, 1) + rotated_samples,
             "scales": model.scales.data[split_mask].repeat(2, 1) - math.log(1.6),
             "quats": model.quats.data[split_mask].repeat(2, 1),
             "opacities_raw": model.opacities_raw.data[split_mask].repeat(2),
