@@ -12,7 +12,7 @@ import { readdir, stat, realpath } from "fs/promises";
 import { join, relative, resolve } from "path";
 
 const PORT = parseInt(process.env.PORT || "3001", 10);
-const SPLAT_DIR = resolve(process.env.SPLAT_DIR || join(import.meta.dir, "../.."));
+const SPLAT_DIR = resolve(process.env.SPLAT_DIR || "/root/splatting/3dgs/output");
 
 let bundledJs = "";
 
