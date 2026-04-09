@@ -7,8 +7,9 @@ MODEL       := output/better_pov
 ITERATIONS  := 30000
 FPS         := 2
 
-# CUDA
+# CUDA + headless COLMAP
 export PATH := /usr/local/cuda/bin:$(PATH)
+export QT_QPA_PLATFORM := offscreen
 
 # Derived paths
 FRAMES_DIR  := $(SCENE)/input
