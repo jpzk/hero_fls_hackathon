@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gaussian Splat Viewer</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #0d0d12;
+      color: #e0e0e0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    #canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: grab;
+    }
+    #canvas:active { cursor: grabbing; }
+
+    #overlay {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      z-index: 10;
+      transition: opacity 0.3s;
+    }
+    #overlay.drag-active {
+      background: rgba(80, 120, 255, 0.1);
+      border: 2px dashed rgba(80, 120, 255, 0.4);
+    }
+
+    .drop-zone {
+      text-align: center;
+      padding: 60px;
+      border: 2px dashed rgba(255,255,255,0.15);
+      border-radius: 16px;
+      pointer-events: all;
+      backdrop-filter: blur(10px);
+      background: rgba(20, 20, 30, 0.8);
+    }
+
+    .drop-zone h1 {
+      font-size: 1.5em;
+      font-weight: 500;
+      margin-bottom: 12px;
+      color: #fff;
+    }
+
+    .drop-zone p {
+      color: #888;
+      margin-bottom: 20px;
+    }
+
+    #file-btn {
+      background: rgba(80, 120, 255, 0.2);
+      border: 1px solid rgba(80, 120, 255, 0.4);
+      color: #7aa2ff;
+      padding: 10px 24px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.95em;
+      pointer-events: all;
+      transition: background 0.2s;
+    }
+    #file-btn:hover {
+      background: rgba(80, 120, 255, 0.35);
+    }
+
+    #stats {
+      position: fixed;
+      top: 12px;
+      right: 16px;
+      background: rgba(0,0,0,0.6);
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 0.85em;
+      font-variant-numeric: tabular-nums;
+      color: #aaa;
+      display: none;
+      z-index: 20;
+    }
+
+    #status {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.7);
+      padding: 8px 20px;
+      border-radius: 8px;
+      font-size: 0.9em;
+      display: none;
+      z-index: 20;
+    }
+
+    .controls-hint {
+      position: fixed;
+      bottom: 12px;
+      right: 16px;
+      font-size: 0.75em;
+      color: #555;
+      z-index: 20;
+    }
+
+    .loading-text, .error-text {
+      font-size: 1.2em;
+      color: #888;
+    }
+    .error-text { color: #f66; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+
+  <div id="overlay">
+    <div class="drop-zone">
+      <h1>Gaussian Splat Viewer</h1>
+      <p>Drop a .ply or .splat file here</p>
+      <button id="file-btn">Choose File</button>
+    </div>
+  </div>
+
+  <div id="stats"></div>
+  <div id="status"></div>
+  <div class="controls-hint">
+    LMB: orbit &nbsp; RMB: pan &nbsp; Scroll: zoom
+  </div>
+
+  <script type="module" src="./src/main.ts"></script>
+</body>
+</html>

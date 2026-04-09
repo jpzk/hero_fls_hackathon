@@ -1,0 +1,11 @@
+{
+  "name": "gaussian-splat-viewer",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "bun run --hot src/dev.ts",
+    "build": "bun build src/main.ts --outdir dist --minify"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}

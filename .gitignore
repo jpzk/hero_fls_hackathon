@@ -1,0 +1,11 @@
+node_modules/
+dist/
+__pycache__/
+*.pyc
+output/
+data/
+*.splat
+*.ply
+.DS_Store
+bun.lock
+bunfig.toml
