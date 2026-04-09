@@ -45,9 +45,10 @@ else
 endif
 
 # Derive scene/model names from video filename
+# Intermediary files go to /tmp for faster IO; final output copied to persistent storage
 VIDEO_NAME  := $(basename $(notdir $(VIDEO)))
-SCENE       := $(GS)/data/$(VIDEO_NAME)
-MODEL       := $(GS)/output/$(VIDEO_NAME)
+SCENE       := /tmp/splatting/$(VIDEO_NAME)
+MODEL       := /tmp/splatting/$(VIDEO_NAME)_model
 
 # CUDA + headless COLMAP + workspace Python libs
 export PATH := /usr/local/cuda/bin:$(PATH)
@@ -134,7 +135,7 @@ viewer:
 	@if [ -f $(VIEWER_PID) ] && kill -0 $$(cat $(VIEWER_PID)) 2>/dev/null; then \
 		echo "Viewer already running (PID $$(cat $(VIEWER_PID)))"; \
 	else \
-		cd $(VIEWER_DIR) && nohup bun run src/dev.ts > /tmp/viewer.log 2>&1 & echo $$! > $(VIEWER_PID); \
+		cd $(VIEWER_DIR) && PATH=$$HOME/.bun/bin:$$PATH nohup bun run src/dev.ts > /tmp/viewer.log 2>&1 & echo $$! > $(VIEWER_PID); \
 		echo "Viewer started (PID $$(cat $(VIEWER_PID))), log: /tmp/viewer.log"; \
 	fi
 
