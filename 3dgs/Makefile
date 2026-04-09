@@ -1,9 +1,9 @@
 # 3D Gaussian Splatting pipeline: video → .splat
 # Usage: make splat
 
-VIDEO       := better_pov.MOV
-SCENE       := data/better_pov
-MODEL       := output/better_pov
+VIDEO       := IMG_7249.MOV
+SCENE       := data/IMG_7249
+MODEL       := output/IMG_7249
 ITERATIONS  := 30000
 FPS         := 6
 TIMESTAMP   := $(shell date +%H%M)
