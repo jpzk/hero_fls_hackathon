@@ -245,7 +245,7 @@ def train(
             if config.densify_from < step < config.densify_until and use_gsplat:
                 # Track max screen-space radii for pruning
                 if radii_info is not None:
-                    radii_flat = radii_info[0]  # remove batch dim
+                    radii_flat = radii_info.squeeze()  # ensure 1D [N]
                     visible = radii_flat > 0
                     model.max_radii2d[visible] = torch.max(
                         model.max_radii2d[visible], radii_flat[visible].float()
@@ -253,7 +253,8 @@ def train(
 
                 # Accumulate 2D viewspace gradients (matching reference impl)
                 if means2d is not None and means2d.grad is not None:
-                    grad_norms = means2d.grad[0].norm(dim=-1, keepdim=True)
+                    grad_2d = means2d.grad.reshape(-1, 2)  # ensure [N, 2]
+                    grad_norms = grad_2d.norm(dim=-1, keepdim=True)
                     if radii_info is not None:
                         model.xyz_gradient_accum[visible] += grad_norms[visible]
                         model.denom[visible] += 1
