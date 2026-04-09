@@ -4,6 +4,7 @@
 
 export class OrbitCamera {
   target = [0, 0, 0];
+  enabled = true;
   distance = 5;
   azimuth = 0;     // radians
   elevation = 0.3; // radians
@@ -30,6 +31,7 @@ export class OrbitCamera {
   }
 
   private onMouseDown = (e: MouseEvent) => {
+    if (!this.enabled) return;
     if (e.button === 0) this.dragging = true;
     if (e.button === 2) this.panning = true;
     this.lastX = e.clientX;
@@ -37,6 +39,7 @@ export class OrbitCamera {
   };
 
   private onMouseMove = (e: MouseEvent) => {
+    if (!this.enabled) return;
     const dx = e.clientX - this.lastX;
     const dy = e.clientY - this.lastY;
     this.lastX = e.clientX;
@@ -63,6 +66,7 @@ export class OrbitCamera {
   };
 
   private onWheel = (e: WheelEvent) => {
+    if (!this.enabled) return;
     e.preventDefault();
     this.distance *= 1 + e.deltaY * 0.001;
     this.distance = Math.max(0.1, Math.min(500, this.distance));

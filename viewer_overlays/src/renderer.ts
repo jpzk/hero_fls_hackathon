@@ -10,256 +10,6 @@ import type { SplatData } from "./loader";
 import { OrbitCamera } from "./camera";
 import { OverlayRenderer, type Overlay } from "./overlays";
 
-// Vertex shader: positions a quad for each gaussian based on its 2D projection
-const VERT_SRC = `#version 300 es
-precision highp float;
-
-// Per-vertex: quad corner [-1,-1] to [1,1]
-layout(location = 0) in vec2 a_quad;
-
-// Per-instance data from textures
-uniform sampler2D u_positions;   // xyz
-uniform sampler2D u_scales;      // scale xyz
-uniform sampler2D u_colors;      // rgba
-uniform sampler2D u_rotations;   // quaternion wxyz
-uniform isampler2D u_sortIndex;  // sorted index
-
-uniform mat4 u_view;
-uniform mat4 u_proj;
-uniform vec2 u_viewport;
-uniform int u_count;
-uniform float u_texSize;
-
-out vec4 v_color;
-out vec2 v_offset;
-out float v_opacity;
-
-mat3 quatToMat(vec4 q) {
-    float x = q.x, y = q.y, z = q.z, w = q.w;
-    return mat3(
-        1.0 - 2.0*(y*y + z*z), 2.0*(x*y + w*z), 2.0*(x*z - w*y),
-        2.0*(x*y - w*z), 1.0 - 2.0*(x*x + z*z), 2.0*(y*z + w*x),
-        2.0*(x*z + w*y), 2.0*(y*z - w*x), 1.0 - 2.0*(x*x + y*y)
-    );
-}
-
-void main() {
-    // Get sorted index
-    int sortedID = gl_InstanceID;
-    ivec2 sortCoord = ivec2(sortedID % int(u_texSize), sortedID / int(u_texSize));
-    int idx = texelFetch(u_sortIndex, sortCoord, 0).r;
-
-    // Fetch data
-    ivec2 texCoord = ivec2(idx % int(u_texSize), idx / int(u_texSize));
-    vec3 pos = texelFetch(u_positions, texCoord, 0).rgb;
-    vec3 scale = texelFetch(u_scales, texCoord, 0).rgb;
-    vec4 color = texelFetch(u_colors, texCoord, 0);
-    vec4 quat = texelFetch(u_rotations, texCoord, 0);
-
-    // View space position
-    vec4 viewPos = u_view * vec4(pos, 1.0);
-
-    // Skip if behind camera
-    if (viewPos.z > -0.1) {
-        gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
-        return;
-    }
-
-    // Build 3D covariance from scale and rotation
-    mat3 R = quatToMat(quat);
-    mat3 S = mat3(scale.x, 0, 0, 0, scale.y, 0, 0, 0, scale.z);
-    mat3 M = R * S;
-    mat3 cov3d = M * transpose(M);
-
-    // Project to 2D covariance using Jacobian of perspective projection
-    float fx = u_proj[0][0] * u_viewport.x * 0.5;
-    float fy = u_proj[1][1] * u_viewport.y * 0.5;
-    float z = -viewPos.z;
-    float z2 = z * z;
-
-    // Jacobian of projection
-    mat3 viewRot = mat3(u_view);
-    mat3 cov3dView = viewRot * cov3d * transpose(viewRot);
-
-    float a = cov3dView[0][0] * fx * fx / z2;
-    float b = cov3dView[0][1] * fx * fy / z2;
-    float c = cov3dView[1][1] * fy * fy / z2;
-
-    // Add low-pass filter
-    a += 0.3;
-    c += 0.3;
-
-    // Eigenvalues of 2D covariance → radii of ellipse
-    float det = a * c - b * b;
-    if (det < 1e-10) {
-        gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
-        return;
-    }
-
-    float trace = a + c;
-    float disc = sqrt(max(0.0, trace * trace - 4.0 * det));
-    float lambda1 = (trace + disc) * 0.5;
-    float lambda2 = (trace - disc) * 0.5;
-
-    float radius1 = ceil(3.0 * sqrt(lambda1));
-    float radius2 = ceil(3.0 * sqrt(lambda2));
-    float maxRadius = max(radius1, radius2);
-
-    // Compute eigenvectors for proper ellipse orientation
-    float angle = 0.5 * atan(2.0 * b, a - c);
-    float cosA = cos(angle);
-    float sinA = sin(angle);
-
-    // Position quad vertices
-    vec2 quadOffset = a_quad * maxRadius;
-    vec2 screenCenter = vec2(
-        (u_proj[0][0] * viewPos.x / (-viewPos.z) + u_proj[2][0]) * u_viewport.x * 0.5 + u_viewport.x * 0.5,
-        (u_proj[1][1] * viewPos.y / (-viewPos.z) + u_proj[2][1]) * u_viewport.y * 0.5 + u_viewport.y * 0.5
-    );
-    vec2 screenPos = screenCenter + quadOffset;
-
-    // Convert to clip space
-    gl_Position = vec4(
-        screenPos.x / u_viewport.x * 2.0 - 1.0,
-        screenPos.y / u_viewport.y * 2.0 - 1.0,
-        0.0, 1.0
-    );
-
-    // Pass to fragment shader
-    v_color = vec4(color.rgb, 1.0);
-    v_opacity = color.a;
-
-    // Compute the inverse 2D covariance for the fragment shader
-    // We pass the offset and let the fragment compute the gaussian
-    float invDet = 1.0 / det;
-    // v_offset encodes the position relative to gaussian center in "covariance space"
-    // We need to pass the 2D cov inverse to fragment... use v_offset for the quad position
-    // and pack the cov inverse in v_color.a... actually let's keep it simpler
-
-    // The fragment shader gets the offset from center and computes exp(-0.5 * offset^T * covInv * offset)
-    // Pack covInv into varyings
-    v_offset = a_quad * maxRadius;
-
-    // Recompute in fragment... or just pass what we need
-    // Actually, let's use a simpler approach: transform offset to normalized gaussian space
-    // where the gaussian is a unit circle
-    float invA = c * invDet;
-    float invB = -b * invDet;
-    float invC = a * invDet;
-
-    // Transform quad offset to gaussian-normalized space
-    // power = 0.5 * (invA * dx^2 + 2*invB*dx*dy + invC*dy^2)
-    // We can pass (invA, invB, invC) but we only have 2 varyings left...
-    // Simpler: just compute power from the offset in screen pixels
-
-    // Actually let's use a flat varying approach
-    // We'll compute the gaussian weight in the vertex shader per-quad-corner
-    float dx = v_offset.x;
-    float dy = v_offset.y;
-    float power = 0.5 * (invA * dx * dx + 2.0 * invB * dx * dy + invC * dy * dy);
-
-    // This won't interpolate correctly... let's pass the cov inverse components
-    // Use v_offset for position, compute power in fragment
-    // We need 3 more floats: invA, invB, invC -> abuse v_color since we have 4 channels
-
-    // Let's restructure: pass everything we need
-    v_offset = a_quad * maxRadius; // screen-space offset from center, in pixels
-}
-`;
-
-// Fragment shader: computes gaussian falloff
-const FRAG_SRC = `#version 300 es
-precision highp float;
-
-in vec4 v_color;
-in vec2 v_offset;
-in float v_opacity;
-
-out vec4 fragColor;
-
-void main() {
-    // Simple radial gaussian (approximation - treats as circular)
-    // For proper elliptical, we'd need the inverse covariance
-    float d2 = dot(v_offset, v_offset);
-    // v_offset is in pixels, scaled to maxRadius which is 3*sigma
-    // So at the edge, |offset| = maxRadius = 3*sigma, and we want exp(-0.5*(3)^2) ≈ 0.011
-    // Normalize: offset/maxRadius gives us units of sigma... but maxRadius varies per axis
-    // For the simple circular case, this is fine as an approximation
-
-    // We need to know maxRadius to normalize. Since offset goes from -maxR to +maxR
-    // and the quad is -1 to 1 scaled by maxRadius, the furthest corner is at sqrt(2)*maxR
-    // Let's use a simpler approach: d2 is already in pixel^2
-
-    // Actually, the correct approach is to pass the inverse covariance.
-    // Let's use a screen-space approximation that works well in practice:
-    // The quad is sized to 3*sigma, so at the edges we want the gaussian to be ~0.
-    // We know max offset = maxRadius ≈ 3*sqrt(maxEigenvalue)
-    // Normalize offset to [0,1] range where 1 = 3sigma
-
-    // Since we're already sizing the quad to maxRadius = 3*sqrt(lambda_max),
-    // a good approximation is:
-    float len = length(v_offset);
-    // But we don't have maxRadius here...
-
-    // Simplest correct approach: use a fixed gaussian with the quad size
-    // The quad corners are at ±maxRadius, so |a_quad| max is sqrt(2)
-    // We multiplied by maxRadius, so |v_offset| max = sqrt(2)*maxRadius
-    // We want: at center=1, at 3sigma=exp(-4.5)≈0.011, at corner=~0
-
-    // Use a normalized gaussian: exp(-dot(offset,offset) / (2*sigma^2))
-    // where sigma = maxRadius/3
-    // But we don't have maxRadius in the fragment shader.
-
-    // Better approach: pass sigma or use the fact that a_quad goes -1..1
-    // Before maxRadius scaling, the quad is -1..1, so at corners dist = sqrt(2)
-    // sigma in quad space = 1/3 (since quad extends to 3sigma)
-    // So power = dot(a_quad, a_quad) / (2 * (1/3)^2) = dot * 4.5
-
-    // BUT v_offset = a_quad * maxRadius, and we don't have maxRadius.
-    // The trick: just use a fixed falloff on normalized coordinates.
-
-    // Let's fix this by passing a_quad directly as v_offset instead:
-    // Actually the vertex shader sets v_offset = a_quad * maxRadius
-    // We should pass a_quad directly. Let me use a power estimate:
-
-    // A simpler and correct approach used by many web viewers:
-    // alpha = exp(-d2), where d2 is computed from a_quad coordinates
-    // Since a_quad is ±1 at edges and 0 at center, and we want 3-sigma coverage:
-    // We want falloff such that at dist=1 (edge of quad) alpha ≈ 0.011
-    // exp(-4.5) ≈ 0.011, so: alpha = exp(-4.5 * dot(a_quad, a_quad))
-
-    // But v_offset = a_quad * maxRadius, we need to undo that.
-    // Actually, this doesn't work because the interpolation of a_quad * maxRadius
-    // is the same as interpolating a_quad and multiplying by maxRadius (which is constant per instance).
-    // So v_offset / maxRadius = a_quad... but we still don't have maxRadius.
-
-    // SOLUTION: just set v_offset = a_quad (the raw [-1,1] quad coords)
-    // and do the falloff in the fragment shader. Let me fix the vertex shader.
-
-    // For now, use a simple radial approximation:
-    // Assume v_offset is proportional to position in gaussian space
-    // The quad is sized to 3sigma, so edge = 3sigma, center = 0
-    // After interpolation, max(|v_offset|) on edge ≈ maxRadius
-    // We want gaussian falloff based on distance from center.
-
-    // Use a power that gives good visual results:
-    float alpha = exp(-4.5 * dot(v_offset, v_offset) / max(dot(v_offset, v_offset) + 0.001, 1.0));
-
-    // Simpler and more correct: treat offset as in sigma units
-    // v_offset goes from 0 at center to maxRadius at edge
-    // maxRadius = 3*sigma, so v_offset/maxRadius * 3 = offset_in_sigmas
-    // But without maxRadius... let's just use a simple radial falloff
-
-    alpha = v_opacity * exp(-d2 * 0.001);
-    if (alpha < 1.0/255.0) discard;
-
-    fragColor = vec4(v_color.rgb * alpha, alpha);
-}
-`;
-
-// Actually, let me rewrite the shaders properly. The above got messy.
-// Here's the clean version:
-
 const VERTEX_SHADER = `#version 300 es
 precision highp float;
 precision highp int;
@@ -285,6 +35,9 @@ out vec2 v_conic_z_and_offset_y; // conic.z, unused
 out vec2 v_center;
 out vec2 v_position;
 
+uniform int u_heatmapMode;
+out float v_heatValue;
+
 mat3 quatToMat(vec4 q) {
     float w = q.x, x = q.y, y = q.z, z = q.w;
     return mat3(
@@ -304,6 +57,14 @@ void main() {
     vec3 scale = texelFetch(u_scales, tc, 0).rgb;
     vec4 rgba = texelFetch(u_colors, tc, 0);
     vec4 quat = texelFetch(u_rotations, tc, 0);
+
+    if (u_heatmapMode == 1) {
+        v_heatValue = rgba.a;
+    } else if (u_heatmapMode == 2) {
+        v_heatValue = clamp(length(scale) / 2.0, 0.0, 1.0);
+    } else {
+        v_heatValue = -1.0;
+    }
 
     vec4 cam = u_view * vec4(pos, 1.0);
     if (cam.z > -0.2) {
@@ -378,8 +139,17 @@ in vec2 v_conic_and_offset_x;
 in vec2 v_conic_z_and_offset_y;
 in vec2 v_center;
 in vec2 v_position;
+in float v_heatValue;
 
 out vec4 fragColor;
+
+vec3 heatmapColor(float t) {
+    t = clamp(t, 0.0, 1.0);
+    if (t < 0.25) return mix(vec3(0.0, 0.0, 1.0), vec3(0.0, 1.0, 1.0), t * 4.0);
+    if (t < 0.5)  return mix(vec3(0.0, 1.0, 1.0), vec3(0.0, 1.0, 0.0), (t - 0.25) * 4.0);
+    if (t < 0.75) return mix(vec3(0.0, 1.0, 0.0), vec3(1.0, 1.0, 0.0), (t - 0.5) * 4.0);
+    return mix(vec3(1.0, 1.0, 0.0), vec3(1.0, 0.0, 0.0), (t - 0.75) * 4.0);
+}
 
 void main() {
     vec2 d = v_position - v_center;
@@ -394,7 +164,8 @@ void main() {
     if (alpha < 1.0 / 255.0) discard;
 
     // Premultiplied alpha output
-    fragColor = vec4(v_color.rgb * alpha, alpha);
+    vec3 rgb = v_heatValue >= 0.0 ? heatmapColor(v_heatValue) : v_color.rgb;
+    fragColor = vec4(rgb * alpha, alpha);
 }
 `;
 
@@ -420,6 +191,7 @@ export class SplatRenderer {
 
   camera: OrbitCamera;
   overlayRenderer: OverlayRenderer;
+  heatmapMode: number = 0;
 
   constructor(private canvas: HTMLCanvasElement) {
     const gl = canvas.getContext("webgl2", {
@@ -513,6 +285,16 @@ export class SplatRenderer {
   loadSplatData(data: import("./loader").SplatData) {
     const gl = this.gl;
     const count = data.count;
+
+    // Clean up old textures
+    if (this.textures) {
+      gl.deleteTexture(this.textures.positions);
+      gl.deleteTexture(this.textures.scales);
+      gl.deleteTexture(this.textures.colors);
+      gl.deleteTexture(this.textures.rotations);
+      gl.deleteTexture(this.textures.sortIndex);
+    }
+
     this.splatCount = count;
 
     // Texture size (square, power of 2)
@@ -549,7 +331,11 @@ export class SplatRenderer {
       scales: createTex(gl.RGB32F, ts, ts, gl.RGB, gl.FLOAT, padF(data.scales, 3)),
       colors: createTex(gl.RGBA8, ts, ts, gl.RGBA, gl.UNSIGNED_BYTE, padU(data.colors, 4)),
       rotations: createTex(gl.RGBA32F, ts, ts, gl.RGBA, gl.FLOAT, padF(data.rotations, 4)),
-      sortIndex: createTex(gl.R32I, ts, ts, gl.RED_INTEGER, gl.INT, new Int32Array(ts * ts)),
+      sortIndex: (() => {
+        const identity = new Int32Array(ts * ts);
+        for (let i = 0; i < count; i++) identity[i] = i;
+        return createTex(gl.R32I, ts, ts, gl.RED_INTEGER, gl.INT, identity);
+      })(),
     };
 
     // Init sort buffers
@@ -669,6 +455,7 @@ export class SplatRenderer {
     const fx = w / (2 * Math.tan(fovRad / 2) * (w / h) / (w / h)); // same as fy for square pixels
     gl.uniform1f(loc("u_focal_x"), fy * (w / h));
     gl.uniform1f(loc("u_focal_y"), fy);
+    gl.uniform1i(loc("u_heatmapMode"), this.heatmapMode);
 
     // Bind textures
     const bindTex = (unit: number, tex: WebGLTexture, name: string) => {

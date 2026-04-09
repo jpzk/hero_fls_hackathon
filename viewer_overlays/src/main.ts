@@ -8,8 +8,10 @@
 import { SplatRenderer } from "./renderer";
 import { detectAndLoad, analyzeSplatData, repairSplatData, type SplatData } from "./loader";
 import type { Overlay } from "./overlays";
+import { screenToRay, pickOverlay, rayBoxFace, beginDrag, updateDrag, type DragState } from "./interaction";
 
 let renderer: SplatRenderer;
+let dragState: DragState | null = null;
 let stats: { fps: number; gaussians: number } = { fps: 0, gaussians: 0 };
 let frameCount = 0;
 let lastFpsTime = performance.now();
@@ -39,7 +41,90 @@ function init() {
   setupDragDrop(canvas);
   setupFilePicker();
   setupOverlayPanel();
+  setupHeatmapControls();
+
+  let mouseDownPos = { x: 0, y: 0 };
+
+  canvas.addEventListener("mousedown", (e) => {
+    if (e.button !== 0) return;
+    mouseDownPos = { x: e.clientX, y: e.clientY };
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const x = (e.clientX - rect.left) * dpr;
+    const y = (e.clientY - rect.top) * dpr;
+    const ray = screenToRay(x, y, canvas.width, canvas.height, renderer.camera);
+
+    const sel = renderer.overlayRenderer.selectedIndex;
+    if (sel >= 0) {
+      dragState = beginDrag(renderer.overlayRenderer.overlays, ray, sel);
+      if (dragState) {
+        renderer.camera.enabled = false;
+        return;
+      }
+    }
+  });
+
+  canvas.addEventListener("mousemove", (e) => {
+    if (dragState) {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const x = (e.clientX - rect.left) * dpr;
+      const y = (e.clientY - rect.top) * dpr;
+      const ray = screenToRay(x, y, canvas.width, canvas.height, renderer.camera);
+      updateDrag(dragState, renderer.overlayRenderer.overlays, ray);
+      return;
+    }
+
+    const sel = renderer.overlayRenderer.selectedIndex;
+    if (sel >= 0) {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const x = (e.clientX - rect.left) * dpr;
+      const y = (e.clientY - rect.top) * dpr;
+      const ray = screenToRay(x, y, canvas.width, canvas.height, renderer.camera);
+      const o = renderer.overlayRenderer.overlays[sel];
+      if (o && o.type === "box") {
+        const faceHit = rayBoxFace(ray, o.center, o.halfExtents);
+        if (faceHit) {
+          const axis = faceHit.face >> 1;
+          canvas.style.cursor = axis === 1 ? "ns-resize" : "ew-resize";
+        } else {
+          canvas.style.cursor = "grab";
+        }
+        return;
+      }
+    }
+    canvas.style.cursor = "grab";
+  });
+
+  canvas.addEventListener("mouseup", (e) => {
+    if (dragState) {
+      dragState = null;
+      renderer.camera.enabled = true;
+      return;
+    }
+    const dx = e.clientX - mouseDownPos.x;
+    const dy = e.clientY - mouseDownPos.y;
+    if (dx * dx + dy * dy < 9) {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const x = (e.clientX - rect.left) * dpr;
+      const y = (e.clientY - rect.top) * dpr;
+      const ray = screenToRay(x, y, canvas.width, canvas.height, renderer.camera);
+      const idx = pickOverlay(renderer.overlayRenderer.overlays, ray);
+      renderer.overlayRenderer.selectedIndex = idx;
+    }
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      renderer.overlayRenderer.selectedIndex = -1;
+      (document.getElementById("canvas") as HTMLCanvasElement).style.cursor = "grab";
+    }
+  });
+
   checkUrlParam();
+  loadFileList();
 }
 
 function showToast(message: string, type: "warning" | "info" = "info") {
@@ -221,6 +306,37 @@ function setupOverlayPanel() {
   }
 }
 
+function setupHeatmapControls() {
+  const panel = document.getElementById("overlay-panel-wrap")!;
+  const section = document.createElement("div");
+  section.style.cssText = "margin-top:12px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.08)";
+
+  const header = document.createElement("div");
+  header.textContent = "HEATMAP";
+  header.style.cssText = "font-size:0.8em;font-weight:600;color:#aaa;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px";
+  section.appendChild(header);
+
+  const modes = [
+    { label: "Off", value: 0 },
+    { label: "Alpha", value: 1 },
+    { label: "Scale", value: 2 },
+  ];
+
+  for (const mode of modes) {
+    const btn = document.createElement("button");
+    btn.textContent = mode.label;
+    btn.className = "heatmap-btn" + (mode.value === 0 ? " active" : "");
+    btn.addEventListener("click", () => {
+      renderer.heatmapMode = mode.value;
+      section.querySelectorAll(".heatmap-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+    });
+    section.appendChild(btn);
+  }
+
+  panel.appendChild(section);
+}
+
 function updateStats() {
   const el = document.getElementById("stats")!;
   if (stats.gaussians > 0) {
@@ -271,6 +387,59 @@ function setupFilePicker() {
       };
       input.click();
     });
+  }
+}
+
+function formatSize(bytes: number): string {
+  if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(1)} MB`;
+  if (bytes >= 1_000) return `${(bytes / 1_000).toFixed(0)} KB`;
+  return `${bytes} B`;
+}
+
+async function loadFileList() {
+  const listEl = document.getElementById("file-list");
+  if (!listEl) return;
+
+  try {
+    const resp = await fetch("/api/splats");
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const files: { name: string; path: string; size: number }[] = await resp.json();
+
+    if (files.length === 0) {
+      listEl.innerHTML = '<div class="file-list-empty">No .splat or .ply files found</div>';
+      return;
+    }
+
+    listEl.innerHTML = "";
+    for (const file of files) {
+      const item = document.createElement("div");
+      item.className = "file-item";
+      item.innerHTML = `
+        <div>
+          <div class="file-item-name">${file.name}</div>
+          <div class="file-item-path">${file.path}</div>
+        </div>
+        <div class="file-item-size">${formatSize(file.size)}</div>
+      `;
+      item.addEventListener("click", () => loadFromServer(file.path, file.name));
+      listEl.appendChild(item);
+    }
+  } catch (e: any) {
+    listEl.innerHTML = `<div class="file-list-empty">Could not load file list</div>`;
+  }
+}
+
+async function loadFromServer(filePath: string, filename: string) {
+  const overlay = document.getElementById("overlay")!;
+  overlay.innerHTML = `<div class="loading-text">Loading ${filename}...</div>`;
+
+  try {
+    const resp = await fetch(`/splats/${filePath}`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const buffer = await resp.arrayBuffer();
+    loadFile(buffer, filename);
+  } catch (e: any) {
+    overlay.innerHTML = `<div class="error-text">Failed to load: ${e.message}</div>`;
   }
 }
 

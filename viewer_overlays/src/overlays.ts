@@ -96,6 +96,7 @@ export class OverlayRenderer {
   private colBuf: WebGLBuffer;
 
   overlays: Overlay[] = [];
+  selectedIndex: number = -1;
 
   constructor(gl: WebGL2RenderingContext) {
     this.gl = gl;
@@ -169,7 +170,7 @@ export class OverlayRenderer {
           this.buildRect(o, lineVerts, lineColors, triVerts, triColors);
           break;
         case "box":
-          this.buildBox(o, lineVerts, lineColors);
+          this.buildBox(o, lineVerts, lineColors, triVerts, triColors);
           break;
         case "line":
           this.pushLine(lineVerts, lineColors, o.from, o.to, o.color);
@@ -261,7 +262,18 @@ export class OverlayRenderer {
     }
   }
 
-  private buildBox(o: OverlayBox, verts: number[], colors: number[]) {
+  private buildBox(o: OverlayBox, lineVerts: number[], lineColors: number[], triVerts: number[], triColors: number[]) {
+    const isSelected = this.overlays.indexOf(o) === this.selectedIndex;
+    const edgeColor: [number, number, number, number] = isSelected
+      ? [1, 0.8, 0.2, 1]
+      : o.color;
+    const fillColor: [number, number, number, number] = [
+      isSelected ? 1 : o.color[0],
+      isSelected ? 0.8 : o.color[1],
+      isSelected ? 0.2 : o.color[2],
+      o.color[3] * (isSelected ? 0.25 : 0.15),
+    ];
+
     const [cx, cy, cz] = o.center;
     const [hx, hy, hz] = o.halfExtents;
     const rot = o.rotationY ?? 0;
@@ -281,14 +293,26 @@ export class OverlayRenderer {
       corners = corners.map(p => this.rotateY(p, rot, o.center));
     }
 
-    // 12 edges of a box
     const edges = [
-      [0,1],[1,2],[2,3],[3,0], // front
-      [4,5],[5,6],[6,7],[7,4], // back
-      [0,4],[1,5],[2,6],[3,7], // connecting
+      [0,1],[1,2],[2,3],[3,0],
+      [4,5],[5,6],[6,7],[7,4],
+      [0,4],[1,5],[2,6],[3,7],
     ];
     for (const [a, b] of edges) {
-      this.pushLine(verts, colors, corners[a], corners[b], o.color);
+      this.pushLine(lineVerts, lineColors, corners[a], corners[b], edgeColor);
+    }
+
+    const faces = [
+      [0,1,2,3],
+      [5,4,7,6],
+      [4,0,3,7],
+      [1,5,6,2],
+      [3,2,6,7],
+      [4,5,1,0],
+    ];
+    for (const [a,b,c,d] of faces) {
+      this.pushTri(triVerts, triColors, corners[a], corners[b], corners[c], fillColor);
+      this.pushTri(triVerts, triColors, corners[a], corners[c], corners[d], fillColor);
     }
   }
 

@@ -174,6 +174,114 @@
     }
     .toast-warning { border-color: rgba(255, 200, 50, 0.4); color: #ffd666; }
     .toast-info { border-color: rgba(80, 120, 255, 0.4); color: #7aa2ff; }
+
+    .heatmap-btn {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: #999;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 0.8em;
+      cursor: pointer;
+      margin-right: 4px;
+    }
+    .heatmap-btn.active {
+      background: rgba(80, 120, 255, 0.25);
+      border-color: rgba(80, 120, 255, 0.5);
+      color: #7aa2ff;
+    }
+
+    .file-browser {
+      margin-top: 24px;
+      width: 100%;
+      max-width: 400px;
+    }
+
+    .file-browser-header {
+      font-size: 0.8em;
+      font-weight: 600;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 8px;
+      text-align: left;
+    }
+
+    .file-list {
+      max-height: 240px;
+      overflow-y: auto;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.3);
+    }
+
+    .file-list::-webkit-scrollbar {
+      width: 6px;
+    }
+    .file-list::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 3px;
+    }
+
+    .file-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      cursor: pointer;
+      transition: background 0.15s;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      text-align: left;
+    }
+    .file-item:last-child { border-bottom: none; }
+    .file-item:hover {
+      background: rgba(80, 120, 255, 0.12);
+    }
+
+    .file-item-name {
+      font-size: 0.9em;
+      color: #ccc;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .file-item-path {
+      font-size: 0.72em;
+      color: #666;
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .file-item-size {
+      font-size: 0.78em;
+      color: #666;
+      white-space: nowrap;
+      margin-left: 12px;
+      flex-shrink: 0;
+    }
+
+    .file-list-empty {
+      padding: 16px;
+      text-align: center;
+      color: #555;
+      font-size: 0.85em;
+    }
+
+    .file-list-loading {
+      padding: 16px;
+      text-align: center;
+      color: #666;
+      font-size: 0.85em;
+    }
+
+    .or-divider {
+      color: #555;
+      font-size: 0.85em;
+      margin: 16px 0 4px;
+    }
   </style>
 </head>
 <body>
@@ -184,6 +292,14 @@
       <h1>Gaussian Splat Viewer</h1>
       <p>Drop a .ply or .splat file here</p>
       <button id="file-btn">Choose File</button>
+
+      <div class="file-browser">
+        <div class="or-divider">or load from server</div>
+        <div class="file-browser-header">Available Splats</div>
+        <div id="file-list" class="file-list">
+          <div class="file-list-loading">Scanning...</div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -196,7 +312,7 @@
   </div>
 
   <div class="controls-hint">
-    LMB: orbit &nbsp; RMB: pan &nbsp; Scroll: zoom
+    LMB: orbit &nbsp; RMB: pan &nbsp; Scroll: zoom &nbsp; Click box: select &nbsp; Drag face: resize &nbsp; ESC: deselect
   </div>
 
   <script type="module" src="./src/main.ts"></script>

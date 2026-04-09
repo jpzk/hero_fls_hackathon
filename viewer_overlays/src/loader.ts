@@ -87,10 +87,10 @@ export function loadSplat(buffer: ArrayBuffer): SplatData {
     const fOff = i * 8; // 32 bytes / 4 = 8 floats per splat
     const bOff = i * 32;
 
-    // Position
+    // Position (negate Y to convert from COLMAP/3DGS to OpenGL convention)
     positions[i * 3] = f32[fOff];
-    positions[i * 3 + 1] = f32[fOff + 1];
-    positions[i * 3 + 2] = f32[fOff + 2];
+    positions[i * 3 + 1] = -f32[fOff + 1];
+    positions[i * 3 + 2] = -f32[fOff + 2];
 
     // Scale
     scales[i * 3] = f32[fOff + 3];
@@ -103,11 +103,11 @@ export function loadSplat(buffer: ArrayBuffer): SplatData {
     colors[i * 4 + 2] = u8[bOff + 26];
     colors[i * 4 + 3] = u8[bOff + 27];
 
-    // Rotation: uint8 [0,255] -> float [-1,1]
+    // Rotation: uint8 [0,255] -> float [-1,1], negate y/z to match position flip
     rotations[i * 4] = (u8[bOff + 28] - 128) / 128;
     rotations[i * 4 + 1] = (u8[bOff + 29] - 128) / 128;
-    rotations[i * 4 + 2] = (u8[bOff + 30] - 128) / 128;
-    rotations[i * 4 + 3] = (u8[bOff + 31] - 128) / 128;
+    rotations[i * 4 + 2] = -(u8[bOff + 30] - 128) / 128;
+    rotations[i * 4 + 3] = -(u8[bOff + 31] - 128) / 128;
   }
 
   return { count, positions, scales, colors, rotations };
@@ -185,10 +185,10 @@ export function loadPly(buffer: ArrayBuffer): SplatData {
   for (let i = 0; i < vertexCount; i++) {
     const vo = i * stride;
 
-    // Position
+    // Position (negate Y/Z to convert from COLMAP/3DGS to OpenGL convention)
     positions[i * 3] = getFloat(vo, "x");
-    positions[i * 3 + 1] = getFloat(vo, "y");
-    positions[i * 3 + 2] = getFloat(vo, "z");
+    positions[i * 3 + 1] = -getFloat(vo, "y");
+    positions[i * 3 + 2] = -getFloat(vo, "z");
 
     // Scale (stored as log in ply)
     scales[i * 3] = Math.exp(getFloat(vo, "scale_0"));
@@ -215,10 +215,11 @@ export function loadPly(buffer: ArrayBuffer): SplatData {
     const qy = getFloat(vo, "rot_2");
     const qz = getFloat(vo, "rot_3");
     const qlen = Math.sqrt(qw * qw + qx * qx + qy * qy + qz * qz);
+    // Negate y/z to match position flip
     rotations[i * 4] = qw / qlen;
     rotations[i * 4 + 1] = qx / qlen;
-    rotations[i * 4 + 2] = qy / qlen;
-    rotations[i * 4 + 3] = qz / qlen;
+    rotations[i * 4 + 2] = -qy / qlen;
+    rotations[i * 4 + 3] = -qz / qlen;
   }
 
   return { count: vertexCount, positions, scales, colors, rotations };
