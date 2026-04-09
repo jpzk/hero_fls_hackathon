@@ -7,12 +7,15 @@
 
 GS          := 3dgs
 VIDEO_URL   ?=
-VIDEO       := $(GS)/input/IMG_7249.MOV
-SCENE       := $(GS)/data/IMG_7249
-MODEL       := $(GS)/output/IMG_7249
+VIDEO       ?= $(GS)/input/IMG_7249.MOV
 ITERATIONS  := 30000
 FPS         := 6
 TIMESTAMP   := $(shell date +%H%M)
+
+# Derive scene/model names from video filename
+VIDEO_NAME  := $(basename $(notdir $(VIDEO)))
+SCENE       := $(GS)/data/$(VIDEO_NAME)
+MODEL       := $(GS)/output/$(VIDEO_NAME)
 
 # CUDA + headless COLMAP + workspace Python libs
 export PATH := /usr/local/cuda/bin:$(PATH)
@@ -47,9 +50,17 @@ help: ## Show this help
 	@echo "  ITERATIONS     Training iterations (default: $(ITERATIONS))"
 	@echo "  VIDEO          Path to input video (default: $(VIDEO))"
 
-# Step 0: Download video if VIDEO_URL is set
+# Download video if VIDEO_URL is set
 ifneq ($(VIDEO_URL),)
+# Derive VIDEO from URL filename when VIDEO_URL is provided and VIDEO not explicitly set
+ifeq ($(origin VIDEO),default)
+override VIDEO := $(GS)/input/$(notdir $(VIDEO_URL))
+VIDEO_NAME  := $(basename $(notdir $(VIDEO)))
+SCENE       := $(GS)/data/$(VIDEO_NAME)
+MODEL       := $(GS)/output/$(VIDEO_NAME)
+endif
 $(VIDEO):
+	mkdir -p $(dir $(VIDEO))
 	curl -L -o $(VIDEO) "$(VIDEO_URL)"
 endif
 
