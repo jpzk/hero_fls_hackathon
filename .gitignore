@@ -10,3 +10,5 @@ data/
 bun.lock
 bunfig.toml
 .env
+
+Assets/*

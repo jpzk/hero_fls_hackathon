@@ -16,14 +16,18 @@ let stats: { fps: number; gaussians: number } = { fps: 0, gaussians: 0 };
 let frameCount = 0;
 let lastFpsTime = performance.now();
 
+// UI state
+let viewerActive = false;
+let drawerOpen = true;
+let heatmapMode = 0;
+const heatmapModes = ["Off", "Alpha", "Scale"];
+
 function init() {
   const canvas = document.getElementById("canvas") as HTMLCanvasElement;
   renderer = new SplatRenderer(canvas);
 
-  // Render loop
   function frame() {
     renderer.render();
-
     frameCount++;
     const now = performance.now();
     if (now - lastFpsTime > 1000) {
@@ -32,17 +36,20 @@ function init() {
       lastFpsTime = now;
       updateStats();
     }
-
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
 
-  // Setup file loading
   setupDragDrop(canvas);
-  setupFilePicker();
-  setupOverlayPanel();
-  setupHeatmapControls();
+  setupDropTarget();
+  setupDrawer();
+  setupToolbar();
+  setupTrainToggle();
+  setupTraining();
+  checkUrlParam();
+  loadFileList();
 
+  // Canvas interaction
   let mouseDownPos = { x: 0, y: 0 };
 
   canvas.addEventListener("mousedown", (e) => {
@@ -119,14 +126,103 @@ function init() {
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       renderer.overlayRenderer.selectedIndex = -1;
-      (document.getElementById("canvas") as HTMLCanvasElement).style.cursor = "grab";
+      canvas.style.cursor = "grab";
     }
   });
-
-  setupTraining();
-  checkUrlParam();
-  loadFileList();
 }
+
+// ─── UI State ───
+
+function enterViewingState() {
+  viewerActive = true;
+  setDrawerOpen(false);
+  document.getElementById("toolbar")!.classList.add("visible");
+  document.getElementById("stats")!.classList.add("visible");
+  document.getElementById("controls-hint")!.classList.add("visible");
+}
+
+function setDrawerOpen(open: boolean) {
+  drawerOpen = open;
+  const drawer = document.getElementById("drawer")!;
+  const backdrop = document.getElementById("drawer-backdrop")!;
+
+  if (open) {
+    drawer.classList.remove("hidden");
+    if (viewerActive) {
+      backdrop.classList.add("active");
+    }
+  } else {
+    drawer.classList.add("hidden");
+    backdrop.classList.remove("active");
+  }
+}
+
+function setupDrawer() {
+  const backdrop = document.getElementById("drawer-backdrop")!;
+  backdrop.addEventListener("click", () => {
+    if (viewerActive) setDrawerOpen(false);
+  });
+}
+
+function setupDropTarget() {
+  const dropTarget = document.getElementById("drop-target")!;
+  dropTarget.addEventListener("click", () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".ply,.splat";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (file) {
+        const buffer = await file.arrayBuffer();
+        loadFile(buffer, file.name);
+      }
+    };
+    input.click();
+  });
+}
+
+function setupToolbar() {
+  // Overlay toggles
+  const overlayBtns = ["tb-bbox", "tb-ground", "tb-center", "tb-ring"];
+  for (const id of overlayBtns) {
+    const btn = document.getElementById(id)!;
+    btn.addEventListener("click", () => {
+      btn.classList.toggle("active");
+      const label = btn.dataset.overlay!;
+      overlayVisibility[label] = btn.classList.contains("active");
+      if (!(renderer as any)._allOverlays) {
+        (renderer as any)._allOverlays = [...renderer.overlayRenderer.overlays];
+      }
+      applyVisibility();
+    });
+  }
+
+  // Heatmap cycle
+  const heatBtn = document.getElementById("tb-heatmap")!;
+  const heatLabel = document.getElementById("tb-heatmap-label")!;
+  heatBtn.addEventListener("click", () => {
+    heatmapMode = (heatmapMode + 1) % 3;
+    renderer.heatmapMode = heatmapMode;
+    heatLabel.textContent = `Heatmap: ${heatmapModes[heatmapMode]}`;
+    heatBtn.classList.toggle("active", heatmapMode !== 0);
+  });
+
+  // Open drawer
+  document.getElementById("tb-drawer")!.addEventListener("click", () => {
+    setDrawerOpen(!drawerOpen);
+  });
+}
+
+function setupTrainToggle() {
+  const toggle = document.getElementById("train-toggle")!;
+  const section = document.getElementById("train-section")!;
+  toggle.addEventListener("click", () => {
+    const expanded = section.classList.toggle("expanded");
+    toggle.classList.toggle("expanded", expanded);
+  });
+}
+
+// ─── Loading ───
 
 function showToast(message: string, type: "warning" | "info" = "info") {
   const toast = document.createElement("div");
@@ -142,9 +238,6 @@ function showToast(message: string, type: "warning" | "info" = "info") {
 }
 
 function loadFile(buffer: ArrayBuffer, filename: string) {
-  const overlay = document.getElementById("overlay")!;
-  overlay.style.display = "none";
-
   const statusEl = document.getElementById("status")!;
   statusEl.textContent = "Loading...";
   statusEl.style.display = "block";
@@ -175,6 +268,7 @@ function loadFile(buffer: ArrayBuffer, filename: string) {
       statusEl.style.display = "none";
       updateStats();
       addSceneOverlays(data);
+      enterViewingState();
     } catch (e: any) {
       statusEl.textContent = `Error: ${e.message}`;
       console.error(e);
@@ -182,12 +276,10 @@ function loadFile(buffer: ArrayBuffer, filename: string) {
   }, 16);
 }
 
-/** Add default overlays based on loaded scene bounds */
 function addSceneOverlays(data: SplatData) {
   const count = data.count;
   const pos = data.positions;
 
-  // Compute bounding box
   let minX = Infinity, minY = Infinity, minZ = Infinity;
   let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
   for (let i = 0; i < count; i++) {
@@ -205,14 +297,12 @@ function addSceneOverlays(data: SplatData) {
   const hz = (maxZ - minZ) / 2;
 
   const overlays: Overlay[] = [
-    // Bounding box of the entire scene
     {
       type: "box",
       center: [cx, cy, cz],
       halfExtents: [hx, hy, hz],
       color: [0.3, 0.8, 1.0, 0.6],
     },
-    // Ground plane rectangle
     {
       type: "rect",
       center: [cx, minY, cz],
@@ -221,14 +311,12 @@ function addSceneOverlays(data: SplatData) {
       filled: true,
       plane: "xz",
     },
-    // Center point marker
     {
       type: "point",
       position: [cx, cy, cz],
       color: [1.0, 1.0, 0.0, 1.0],
       size: Math.max(hx, hy, hz) * 0.15,
     },
-    // Horizontal ring around center
     {
       type: "circle",
       center: [cx, cy, cz],
@@ -239,12 +327,9 @@ function addSceneOverlays(data: SplatData) {
   ];
 
   renderer.overlayRenderer.overlays = overlays;
-
-  // Update panel checkboxes
-  syncPanelToOverlays();
 }
 
-// Overlay panel state
+// Overlay visibility
 const overlayVisibility: Record<string, boolean> = {
   "Bounding Box": true,
   "Ground Plane": true,
@@ -252,27 +337,8 @@ const overlayVisibility: Record<string, boolean> = {
   "Center Ring": true,
 };
 
-function syncPanelToOverlays() {
-  const panel = document.getElementById("overlay-panel");
-  if (!panel) return;
-  // Re-render checkboxes
-  const items = panel.querySelectorAll<HTMLInputElement>("input[type=checkbox]");
-  items.forEach(cb => {
-    const label = cb.dataset.label!;
-    cb.checked = overlayVisibility[label] ?? true;
-  });
-}
-
 function applyVisibility() {
   if (!renderer) return;
-  const all = renderer.overlayRenderer.overlays;
-  const labels = Object.keys(overlayVisibility);
-  // Each overlay corresponds to a label by index
-  for (let i = 0; i < labels.length && i < all.length; i++) {
-    // We store all overlays but filter when rendering
-    // Simpler: just set color alpha to 0 for hidden ones
-  }
-  // Rebuild the visible list
   const fullSet = (renderer as any)._allOverlays as Overlay[] | undefined;
   if (fullSet) {
     const labels = Object.keys(overlayVisibility);
@@ -280,62 +346,6 @@ function applyVisibility() {
       overlayVisibility[labels[i]] !== false
     );
   }
-}
-
-function setupOverlayPanel() {
-  const panel = document.getElementById("overlay-panel")!;
-  const labels = Object.keys(overlayVisibility);
-
-  for (const label of labels) {
-    const row = document.createElement("label");
-    row.style.cssText = "display:flex;align-items:center;gap:6px;cursor:pointer;padding:2px 0";
-    const cb = document.createElement("input");
-    cb.type = "checkbox";
-    cb.checked = true;
-    cb.dataset.label = label;
-    cb.addEventListener("change", () => {
-      overlayVisibility[label] = cb.checked;
-      // Save full set on first toggle
-      if (!(renderer as any)._allOverlays) {
-        (renderer as any)._allOverlays = [...renderer.overlayRenderer.overlays];
-      }
-      applyVisibility();
-    });
-    row.appendChild(cb);
-    row.appendChild(document.createTextNode(label));
-    panel.appendChild(row);
-  }
-}
-
-function setupHeatmapControls() {
-  const panel = document.getElementById("overlay-panel-wrap")!;
-  const section = document.createElement("div");
-  section.style.cssText = "margin-top:12px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.08)";
-
-  const header = document.createElement("div");
-  header.textContent = "HEATMAP";
-  header.style.cssText = "font-size:0.8em;font-weight:600;color:#aaa;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px";
-  section.appendChild(header);
-
-  const modes = [
-    { label: "Off", value: 0 },
-    { label: "Alpha", value: 1 },
-    { label: "Scale", value: 2 },
-  ];
-
-  for (const mode of modes) {
-    const btn = document.createElement("button");
-    btn.textContent = mode.label;
-    btn.className = "heatmap-btn" + (mode.value === 0 ? " active" : "");
-    btn.addEventListener("click", () => {
-      renderer.heatmapMode = mode.value;
-      section.querySelectorAll(".heatmap-btn").forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
-    });
-    section.appendChild(btn);
-  }
-
-  panel.appendChild(section);
 }
 
 function updateStats() {
@@ -346,52 +356,56 @@ function updateStats() {
       : stats.gaussians > 1_000
         ? `${(stats.gaussians / 1_000).toFixed(0)}K`
         : `${stats.gaussians}`;
-    el.textContent = `${countStr} splats | ${stats.fps} fps`;
-    el.style.display = "block";
+    el.textContent = `${countStr} splats · ${stats.fps} fps`;
   }
 }
 
+// ─── Drag & Drop ───
+
 function setupDragDrop(canvas: HTMLCanvasElement) {
-  const overlay = document.getElementById("overlay")!;
+  const dragOverlay = document.getElementById("drag-overlay")!;
+  const dropTarget = document.getElementById("drop-target")!;
 
   document.addEventListener("dragover", (e) => {
     e.preventDefault();
-    overlay.classList.add("drag-active");
+    dragOverlay.style.display = "block";
+    dropTarget.classList.add("drag-over");
+    // If drawer is hidden (viewing state), show it for the drop
+    if (viewerActive && !drawerOpen) {
+      setDrawerOpen(true);
+    }
   });
-  document.addEventListener("dragleave", () => {
-    overlay.classList.remove("drag-active");
+  document.addEventListener("dragleave", (e) => {
+    // Only hide if leaving the window
+    if (e.relatedTarget === null) {
+      dragOverlay.style.display = "none";
+      dropTarget.classList.remove("drag-over");
+    }
   });
   document.addEventListener("drop", async (e) => {
     e.preventDefault();
-    overlay.classList.remove("drag-active");
+    dragOverlay.style.display = "none";
+    dropTarget.classList.remove("drag-over");
     const file = e.dataTransfer?.files[0];
     if (file) {
-      const buffer = await file.arrayBuffer();
-      loadFile(buffer, file.name);
+      if (/\.(ply|splat)$/i.test(file.name)) {
+        const buffer = await file.arrayBuffer();
+        loadFile(buffer, file.name);
+      } else if (/\.(mp4|mov|avi|mkv)$/i.test(file.name)) {
+        // Auto-expand training and select video
+        const toggle = document.getElementById("train-toggle")!;
+        const section = document.getElementById("train-section")!;
+        if (!section.classList.contains("expanded")) {
+          section.classList.add("expanded");
+          toggle.classList.add("expanded");
+        }
+        selectVideoFile(file);
+      }
     }
   });
 }
 
-function setupFilePicker() {
-  const btn = document.getElementById("file-btn");
-  if (btn) {
-    btn.addEventListener("click", () => {
-      const input = document.createElement("input");
-      input.type = "file";
-      input.accept = ".ply,.splat";
-      input.onchange = async () => {
-        const file = input.files?.[0];
-        if (file) {
-          const buffer = await file.arrayBuffer();
-          loadFile(buffer, file.name);
-        }
-      };
-      input.click();
-    });
-  }
-}
-
-// --- Training UI ---
+// ─── Training ───
 
 interface TrainingJob {
   status: "idle" | "running" | "completed" | "failed";
@@ -412,10 +426,19 @@ let trainingStartTime: number | null = null;
 
 const STAGES = ["frames", "colmap", "training", "export"] as const;
 
+function selectVideoFile(file: File) {
+  selectedVideo = file;
+  const uploadArea = document.getElementById("train-upload")!;
+  const filenameEl = document.getElementById("train-filename")!;
+  const trainBtn = document.getElementById("train-btn") as HTMLButtonElement;
+  uploadArea.classList.add("has-file");
+  filenameEl.textContent = `${file.name} (${formatSize(file.size)})`;
+  trainBtn.disabled = false;
+}
+
 function setupTraining() {
   const uploadArea = document.getElementById("train-upload")!;
   const fileInput = document.getElementById("train-file-input") as HTMLInputElement;
-  const filenameEl = document.getElementById("train-filename")!;
   const trainBtn = document.getElementById("train-btn") as HTMLButtonElement;
 
   uploadArea.addEventListener("click", () => fileInput.click());
@@ -425,20 +448,13 @@ function setupTraining() {
     e.stopPropagation();
     const file = (e as DragEvent).dataTransfer?.files[0];
     if (file && /\.(mp4|mov|avi|mkv)$/i.test(file.name)) {
-      selectVideo(file);
+      selectVideoFile(file);
     }
   });
 
   fileInput.addEventListener("change", () => {
-    if (fileInput.files?.[0]) selectVideo(fileInput.files[0]);
+    if (fileInput.files?.[0]) selectVideoFile(fileInput.files[0]);
   });
-
-  function selectVideo(file: File) {
-    selectedVideo = file;
-    uploadArea.classList.add("has-file");
-    filenameEl.textContent = `${file.name} (${formatSize(file.size)})`;
-    trainBtn.disabled = false;
-  }
 
   trainBtn.addEventListener("click", startTraining);
 
@@ -448,7 +464,6 @@ function setupTraining() {
     if (outputFile) loadFromServer(outputFile, outputFile.split("/").pop() || "output.splat");
   });
 
-  // Check for existing job on page load
   checkTrainingStatus();
 }
 
@@ -495,6 +510,13 @@ async function checkTrainingStatus() {
     const job: TrainingJob = await resp.json();
     if (job.status === "running" || job.status === "completed" || job.status === "failed") {
       trainingStartTime = job.startedAt;
+
+      // Auto-expand training section
+      const toggle = document.getElementById("train-toggle")!;
+      const section = document.getElementById("train-section")!;
+      section.classList.add("expanded");
+      toggle.classList.add("expanded");
+
       showProgressUI();
       updateProgressUI(job);
       if (job.status === "running") {
@@ -516,10 +538,7 @@ function connectWebSocket() {
     updateProgressUI(job);
   };
   ws.onclose = () => {
-    // Reconnect if job might still be running
-    setTimeout(() => {
-      checkTrainingStatus();
-    }, 2000);
+    setTimeout(() => checkTrainingStatus(), 2000);
   };
 }
 
@@ -529,7 +548,6 @@ function showProgressUI() {
 }
 
 function updateProgressUI(job: TrainingJob) {
-  // Update stage dots
   const stageOrder = STAGES;
   const currentIdx = stageOrder.indexOf(job.stage);
 
@@ -556,7 +574,6 @@ function updateProgressUI(job: TrainingJob) {
     }
   }
 
-  // Progress bar
   const bar = document.getElementById("progress-bar")!;
   const iterEl = document.getElementById("progress-iter")!;
   const lossEl = document.getElementById("progress-loss")!;
@@ -568,7 +585,6 @@ function updateProgressUI(job: TrainingJob) {
     iterEl.textContent = `${job.iteration.toLocaleString()} / ${job.totalIterations.toLocaleString()}`;
     lossEl.textContent = job.loss > 0 ? `Loss: ${job.loss.toFixed(5)}` : "";
 
-    // ETA
     if (job.startedAt && job.iteration > 0) {
       const elapsed = (Date.now() - job.startedAt) / 1000;
       const iterPerSec = job.iteration / elapsed;
@@ -585,7 +601,6 @@ function updateProgressUI(job: TrainingJob) {
     lossEl.textContent = job.loss > 0 ? `Final loss: ${job.loss.toFixed(5)}` : "";
     etaEl.textContent = "";
   } else {
-    // Non-training stages: indeterminate
     const stageNames: Record<string, string> = {
       frames: "Extracting frames...",
       colmap: "Running COLMAP (this takes a while)...",
@@ -599,12 +614,10 @@ function updateProgressUI(job: TrainingJob) {
     bar.style.width = "0%";
   }
 
-  // Logs
   const logEl = document.getElementById("train-log")!;
   logEl.textContent = job.logs.slice(-20).join("\n");
   logEl.scrollTop = logEl.scrollHeight;
 
-  // Error
   const errorEl = document.getElementById("train-error")!;
   if (job.status === "failed" && job.error) {
     errorEl.textContent = job.error;
@@ -613,18 +626,15 @@ function updateProgressUI(job: TrainingJob) {
     errorEl.style.display = "none";
   }
 
-  // Load result button
   const loadBtn = document.getElementById("load-result-btn")!;
   if (job.status === "completed" && job.outputFile) {
     loadBtn.style.display = "block";
     loadBtn.dataset.outputFile = job.outputFile;
-    // Refresh file list
     loadFileList();
   } else {
     loadBtn.style.display = "none";
   }
 
-  // Re-enable train button on completion/failure
   if (job.status === "completed" || job.status === "failed") {
     const trainBtn = document.getElementById("train-btn") as HTMLButtonElement;
     trainBtn.disabled = false;
@@ -637,6 +647,8 @@ function formatSize(bytes: number): string {
   if (bytes >= 1_000) return `${(bytes / 1_000).toFixed(0)} KB`;
   return `${bytes} B`;
 }
+
+// ─── File List ───
 
 async function loadFileList() {
   const listEl = document.getElementById("file-list");
@@ -672,8 +684,9 @@ async function loadFileList() {
 }
 
 async function loadFromServer(filePath: string, filename: string) {
-  const overlay = document.getElementById("overlay")!;
-  overlay.innerHTML = `<div class="loading-text">Loading ${filename}...</div>`;
+  const statusEl = document.getElementById("status")!;
+  statusEl.textContent = `Loading ${filename}...`;
+  statusEl.style.display = "block";
 
   try {
     const resp = await fetch(`/splats/${filePath}`);
@@ -681,7 +694,7 @@ async function loadFromServer(filePath: string, filename: string) {
     const buffer = await resp.arrayBuffer();
     loadFile(buffer, filename);
   } catch (e: any) {
-    overlay.innerHTML = `<div class="error-text">Failed to load: ${e.message}</div>`;
+    statusEl.textContent = `Failed to load: ${e.message}`;
   }
 }
 
@@ -689,8 +702,9 @@ async function checkUrlParam() {
   const params = new URLSearchParams(window.location.search);
   const url = params.get("url");
   if (url) {
-    const overlay = document.getElementById("overlay")!;
-    overlay.innerHTML = `<div class="loading-text">Loading from URL...</div>`;
+    const statusEl = document.getElementById("status")!;
+    statusEl.textContent = "Loading from URL...";
+    statusEl.style.display = "block";
 
     try {
       const resp = await fetch(url);
@@ -698,7 +712,7 @@ async function checkUrlParam() {
       const filename = url.split("/").pop() || "model.splat";
       loadFile(buffer, filename);
     } catch (e: any) {
-      overlay.innerHTML = `<div class="error-text">Failed to load: ${e.message}</div>`;
+      statusEl.textContent = `Failed to load: ${e.message}`;
     }
   }
 }

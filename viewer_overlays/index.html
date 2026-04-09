@@ -3,543 +3,663 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Gaussian Splat Viewer</title>
+  <title>Splat Viewer</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
+    :root {
+      --glass-bg: rgba(18, 18, 24, 0.72);
+      --glass-border: rgba(255, 255, 255, 0.08);
+      --glass-blur: blur(40px);
+      --accent: #6e8eff;
+      --accent-glow: rgba(110, 142, 255, 0.15);
+      --green: #6eccaf;
+      --green-glow: rgba(110, 204, 175, 0.15);
+      --red: #ff6b6b;
+      --text-primary: #f0f0f5;
+      --text-secondary: rgba(255, 255, 255, 0.45);
+      --text-muted: rgba(255, 255, 255, 0.25);
+      --radius: 14px;
+      --transition: 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
     body {
-      background: #0d0d12;
-      color: #e0e0e0;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0a0a10;
+      color: var(--text-primary);
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
       overflow: hidden;
       width: 100vw;
       height: 100vh;
     }
 
+    /* ─── Canvas ─── */
     #canvas {
-      width: 100%;
-      height: 100%;
-      display: block;
+      width: 100%; height: 100%; display: block;
       cursor: grab;
     }
     #canvas:active { cursor: grabbing; }
 
-    #overlay {
+    /* ─── Wordmark ─── */
+    .wordmark {
       position: fixed;
-      inset: 0;
+      top: 16px; left: 20px;
+      font-size: 0.95em;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: rgba(255, 255, 255, 0.5);
+      z-index: 30;
+      user-select: none;
+      transition: opacity var(--transition);
+    }
+
+    /* ─── Stats Pill ─── */
+    #stats {
+      position: fixed;
+      top: 16px; right: 20px;
+      background: var(--glass-bg);
+      backdrop-filter: var(--glass-blur);
+      -webkit-backdrop-filter: var(--glass-blur);
+      border: 1px solid var(--glass-border);
+      padding: 6px 14px;
+      border-radius: 100px;
+      font-size: 0.78em;
+      font-weight: 500;
+      font-variant-numeric: tabular-nums;
+      color: var(--text-secondary);
+      z-index: 30;
+      opacity: 0;
+      transform: translateY(-8px);
+      transition: opacity var(--transition), transform var(--transition);
+      pointer-events: none;
+    }
+    #stats.visible {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
+    /* ─── Bottom Drawer ─── */
+    .drawer-backdrop {
+      position: fixed; inset: 0;
+      z-index: 40;
+      pointer-events: none;
+      transition: background var(--transition);
+    }
+    .drawer-backdrop.active {
+      background: rgba(0, 0, 0, 0.3);
+      pointer-events: auto;
+    }
+
+    .drawer {
+      position: fixed;
+      bottom: 0; left: 50%;
+      transform: translateX(-50%) translateY(0);
+      width: 100%; max-width: 480px;
+      background: var(--glass-bg);
+      backdrop-filter: var(--glass-blur);
+      -webkit-backdrop-filter: var(--glass-blur);
+      border: 1px solid var(--glass-border);
+      border-bottom: none;
+      border-radius: var(--radius) var(--radius) 0 0;
+      z-index: 50;
+      transition: transform var(--transition), opacity var(--transition);
+      box-shadow: 0 -12px 48px rgba(0, 0, 0, 0.4);
+      max-height: 80vh;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+    .drawer.hidden {
+      transform: translateX(-50%) translateY(calc(100% + 20px));
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .drawer::-webkit-scrollbar { width: 5px; }
+    .drawer::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+
+    .drawer-handle {
+      display: flex; justify-content: center;
+      padding: 10px 0 6px;
+      cursor: grab;
+    }
+    .drawer-handle-pill {
+      width: 36px; height: 4px;
+      border-radius: 2px;
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    .drawer-content {
+      padding: 8px 24px 28px;
+    }
+
+    /* ─── Drop Target ─── */
+    .drop-target {
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      pointer-events: none;
-      z-index: 10;
-      transition: opacity 0.3s;
+      gap: 10px;
+      padding: 28px 20px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1.5px solid rgba(255, 255, 255, 0.06);
+      transition: all 0.25s ease;
+      cursor: pointer;
+      margin-bottom: 6px;
     }
-    #overlay.drag-active {
-      background: rgba(80, 120, 255, 0.1);
-      border: 2px dashed rgba(80, 120, 255, 0.4);
+    .drop-target:hover {
+      background: var(--accent-glow);
+      border-color: rgba(110, 142, 255, 0.2);
     }
-
-    .drop-zone {
-      text-align: center;
-      padding: 60px;
-      border: 2px dashed rgba(255,255,255,0.15);
-      border-radius: 16px;
-      pointer-events: all;
-      backdrop-filter: blur(10px);
-      background: rgba(20, 20, 30, 0.8);
+    .drop-target.drag-over {
+      background: var(--accent-glow);
+      border-color: rgba(110, 142, 255, 0.4);
+      box-shadow: 0 0 24px rgba(110, 142, 255, 0.1);
     }
-
-    .drop-zone h1 {
-      font-size: 1.5em;
+    .drop-target-icon {
+      width: 32px; height: 32px;
+      color: var(--text-muted);
+      transition: color 0.25s;
+    }
+    .drop-target:hover .drop-target-icon { color: var(--accent); }
+    .drop-target-text {
+      font-size: 0.85em;
+      color: var(--text-secondary);
       font-weight: 500;
-      margin-bottom: 12px;
-      color: #fff;
+    }
+    .drop-target-hint {
+      font-size: 0.72em;
+      color: var(--text-muted);
     }
 
-    .drop-zone p {
-      color: #888;
-      margin-bottom: 20px;
+    /* ─── Section Divider ─── */
+    .section-divider {
+      display: flex; align-items: center; gap: 12px;
+      margin: 18px 0 14px;
     }
-
-    #file-btn {
-      background: rgba(80, 120, 255, 0.2);
-      border: 1px solid rgba(80, 120, 255, 0.4);
-      color: #7aa2ff;
-      padding: 10px 24px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 0.95em;
-      pointer-events: all;
-      transition: background 0.2s;
+    .section-divider::before, .section-divider::after {
+      content: ''; flex: 1; height: 1px;
+      background: rgba(255, 255, 255, 0.06);
     }
-    #file-btn:hover {
-      background: rgba(80, 120, 255, 0.35);
-    }
-
-    #stats {
-      position: fixed;
-      top: 12px;
-      right: 16px;
-      background: rgba(0,0,0,0.6);
-      padding: 6px 14px;
-      border-radius: 6px;
-      font-size: 0.85em;
-      font-variant-numeric: tabular-nums;
-      color: #aaa;
-      display: none;
-      z-index: 20;
-    }
-
-    #status {
-      position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0,0,0,0.7);
-      padding: 8px 20px;
-      border-radius: 8px;
-      font-size: 0.9em;
-      display: none;
-      z-index: 20;
-    }
-
-    #overlay-panel-wrap {
-      position: fixed;
-      top: 12px;
-      left: 16px;
-      background: rgba(0, 0, 0, 0.7);
-      border-radius: 8px;
-      padding: 10px 14px;
-      z-index: 20;
-      min-width: 140px;
-      backdrop-filter: blur(8px);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-    }
-
-    #overlay-panel-header {
-      font-size: 0.8em;
-      font-weight: 600;
-      color: #aaa;
+    .section-divider span {
+      font-size: 0.7em;
+      font-weight: 500;
+      color: var(--text-muted);
       text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 8px;
+      letter-spacing: 0.06em;
+      white-space: nowrap;
     }
 
-    #overlay-panel label {
-      font-size: 0.85em;
-      color: #ccc;
-    }
-
-    #overlay-panel input[type="checkbox"] {
-      accent-color: #5078ff;
-    }
-
-    .controls-hint {
-      position: fixed;
-      bottom: 12px;
-      right: 16px;
-      font-size: 0.75em;
-      color: #555;
-      z-index: 20;
-    }
-
-    .loading-text, .error-text {
-      font-size: 1.2em;
-      color: #888;
-    }
-    .error-text { color: #f66; }
-
-    .toast {
-      position: fixed;
-      top: 60px;
-      left: 50%;
-      transform: translateX(-50%) translateY(-20px);
-      background: rgba(30, 30, 40, 0.95);
-      border: 1px solid rgba(255, 200, 50, 0.4);
-      color: #ffd666;
-      padding: 12px 24px;
-      border-radius: 8px;
-      font-size: 0.85em;
-      z-index: 100;
-      opacity: 0;
-      transition: opacity 0.3s, transform 0.3s;
-      max-width: 500px;
-      text-align: center;
-      backdrop-filter: blur(10px);
-    }
-    .toast.show {
-      opacity: 1;
-      transform: translateX(-50%) translateY(0);
-    }
-    .toast-warning { border-color: rgba(255, 200, 50, 0.4); color: #ffd666; }
-    .toast-info { border-color: rgba(80, 120, 255, 0.4); color: #7aa2ff; }
-
-    .heatmap-btn {
-      background: rgba(255,255,255,0.06);
-      border: 1px solid rgba(255,255,255,0.1);
-      color: #999;
-      padding: 4px 10px;
-      border-radius: 4px;
-      font-size: 0.8em;
-      cursor: pointer;
-      margin-right: 4px;
-    }
-    .heatmap-btn.active {
-      background: rgba(80, 120, 255, 0.25);
-      border-color: rgba(80, 120, 255, 0.5);
-      color: #7aa2ff;
-    }
-
-    .file-browser {
-      margin-top: 24px;
-      width: 100%;
-      max-width: 400px;
-    }
-
-    .file-browser-header {
-      font-size: 0.8em;
-      font-weight: 600;
-      color: #888;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 8px;
-      text-align: left;
-    }
-
+    /* ─── File List ─── */
     .file-list {
-      max-height: 240px;
+      max-height: 200px;
       overflow-y: auto;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 8px;
-      background: rgba(0, 0, 0, 0.3);
+      border-radius: 10px;
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.04);
     }
-
-    .file-list::-webkit-scrollbar {
-      width: 6px;
-    }
-    .file-list::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.15);
-      border-radius: 3px;
-    }
+    .file-list::-webkit-scrollbar { width: 5px; }
+    .file-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
 
     .file-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
+      display: flex; align-items: center; justify-content: space-between;
       padding: 10px 14px;
       cursor: pointer;
       transition: background 0.15s;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-      text-align: left;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
     }
     .file-item:last-child { border-bottom: none; }
-    .file-item:hover {
-      background: rgba(80, 120, 255, 0.12);
-    }
-
+    .file-item:hover { background: var(--accent-glow); }
     .file-item-name {
-      font-size: 0.9em;
-      color: #ccc;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      font-size: 0.84em; color: var(--text-primary);
+      font-weight: 500;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
-
     .file-item-path {
-      font-size: 0.72em;
-      color: #666;
-      margin-top: 2px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      font-size: 0.68em; color: var(--text-muted);
+      margin-top: 1px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
-
     .file-item-size {
-      font-size: 0.78em;
-      color: #666;
-      white-space: nowrap;
-      margin-left: 12px;
-      flex-shrink: 0;
+      font-size: 0.72em; color: var(--text-muted);
+      white-space: nowrap; margin-left: 12px; flex-shrink: 0;
+      font-variant-numeric: tabular-nums;
+    }
+    .file-list-empty, .file-list-loading {
+      padding: 16px; text-align: center;
+      color: var(--text-muted); font-size: 0.82em;
     }
 
-    .file-list-empty {
-      padding: 16px;
-      text-align: center;
-      color: #555;
-      font-size: 0.85em;
-    }
-
-    .file-list-loading {
-      padding: 16px;
-      text-align: center;
-      color: #666;
-      font-size: 0.85em;
-    }
-
-    .or-divider {
-      color: #555;
-      font-size: 0.85em;
-      margin: 16px 0 4px;
-    }
-
-    /* --- Training UI --- */
-    .train-section {
-      margin-top: 24px;
+    /* ─── Train Section (expandable) ─── */
+    .train-toggle {
+      display: flex; align-items: center; justify-content: center;
+      gap: 6px;
       width: 100%;
-      max-width: 400px;
-      text-align: left;
+      padding: 10px;
+      margin-top: 16px;
+      background: none; border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 10px;
+      color: var(--text-secondary);
+      font-size: 0.8em;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .train-toggle:hover {
+      background: rgba(255, 255, 255, 0.03);
+      border-color: rgba(255, 255, 255, 0.1);
+      color: var(--text-primary);
+    }
+    .train-toggle svg {
+      width: 14px; height: 14px;
+      transition: transform 0.3s;
+    }
+    .train-toggle.expanded svg {
+      transform: rotate(180deg);
     }
 
-    .train-header {
-      font-size: 0.8em;
-      font-weight: 600;
-      color: #888;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 10px;
+    .train-section {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .train-section.expanded {
+      max-height: 500px;
+    }
+    .train-section-inner {
+      padding: 16px 0 4px;
     }
 
     .train-upload-area {
-      border: 2px dashed rgba(255, 255, 255, 0.1);
-      border-radius: 8px;
-      padding: 16px;
+      border: 1.5px dashed rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 18px;
       text-align: center;
       cursor: pointer;
-      transition: border-color 0.2s, background 0.2s;
-      margin-bottom: 12px;
+      transition: all 0.2s;
+      margin-bottom: 14px;
     }
     .train-upload-area:hover {
-      border-color: rgba(80, 120, 255, 0.4);
-      background: rgba(80, 120, 255, 0.05);
+      border-color: rgba(110, 142, 255, 0.3);
+      background: var(--accent-glow);
     }
     .train-upload-area.has-file {
-      border-color: rgba(80, 200, 120, 0.4);
-      background: rgba(80, 200, 120, 0.05);
+      border-color: rgba(110, 204, 175, 0.3);
+      background: var(--green-glow);
     }
     .train-upload-label {
-      font-size: 0.85em;
-      color: #777;
+      font-size: 0.82em; color: var(--text-secondary);
     }
     .train-upload-filename {
-      font-size: 0.85em;
-      color: #8fc98f;
+      font-size: 0.82em; color: var(--green);
       margin-top: 4px;
     }
 
     .train-config {
-      display: flex;
-      gap: 12px;
-      margin-bottom: 12px;
+      display: flex; gap: 12px; margin-bottom: 14px;
     }
     .train-config label {
-      flex: 1;
-      font-size: 0.8em;
-      color: #888;
+      flex: 1; font-size: 0.75em;
+      color: var(--text-secondary); font-weight: 500;
     }
     .train-config input {
-      display: block;
-      width: 100%;
-      margin-top: 4px;
-      padding: 6px 10px;
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 6px;
-      color: #ddd;
-      font-size: 0.9em;
+      display: block; width: 100%; margin-top: 5px;
+      padding: 7px 10px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      color: var(--text-primary);
+      font-size: 0.88em;
       font-variant-numeric: tabular-nums;
+      transition: border-color 0.2s;
     }
     .train-config input:focus {
       outline: none;
-      border-color: rgba(80, 120, 255, 0.5);
+      border-color: rgba(110, 142, 255, 0.4);
     }
 
-    #train-btn {
-      width: 100%;
-      padding: 10px;
-      background: rgba(80, 120, 255, 0.2);
-      border: 1px solid rgba(80, 120, 255, 0.4);
-      color: #7aa2ff;
-      border-radius: 8px;
+    .btn-primary {
+      width: 100%; padding: 10px;
+      background: var(--accent);
+      border: none;
+      color: #fff;
+      border-radius: 10px;
       cursor: pointer;
-      font-size: 0.9em;
-      font-weight: 500;
-      transition: background 0.2s;
+      font-size: 0.85em;
+      font-weight: 600;
+      transition: all 0.2s;
+      letter-spacing: -0.01em;
     }
-    #train-btn:hover:not(:disabled) {
-      background: rgba(80, 120, 255, 0.35);
+    .btn-primary:hover:not(:disabled) {
+      filter: brightness(1.15);
+      box-shadow: 0 4px 16px rgba(110, 142, 255, 0.25);
     }
-    #train-btn:disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
+    .btn-primary:disabled {
+      opacity: 0.35; cursor: not-allowed;
     }
 
-    /* --- Progress UI --- */
+    .btn-success {
+      width: 100%; padding: 10px;
+      background: var(--green);
+      border: none;
+      color: #0a0a10;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 0.85em;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .btn-success:hover {
+      filter: brightness(1.1);
+      box-shadow: 0 4px 16px rgba(110, 204, 175, 0.25);
+    }
+
+    /* ─── Training Progress ─── */
     #training-progress {
       display: none;
-      margin-top: 20px;
-      width: 100%;
-      max-width: 400px;
+      padding-top: 8px;
     }
 
     .stage-indicator {
-      display: flex;
-      justify-content: space-between;
+      display: flex; justify-content: space-between;
       margin-bottom: 16px;
       position: relative;
     }
     .stage-indicator::before {
-      content: '';
-      position: absolute;
-      top: 12px;
-      left: 24px;
-      right: 24px;
+      content: ''; position: absolute;
+      top: 12px; left: 24px; right: 24px;
       height: 2px;
-      background: rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.06);
     }
 
     .stage-step {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 6px;
-      z-index: 1;
+      display: flex; flex-direction: column;
+      align-items: center; gap: 6px; z-index: 1;
     }
     .stage-dot {
-      width: 24px;
-      height: 24px;
+      width: 24px; height: 24px;
       border-radius: 50%;
-      background: rgba(255, 255, 255, 0.08);
-      border: 2px solid rgba(255, 255, 255, 0.15);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.65em;
-      color: #555;
+      background: rgba(255, 255, 255, 0.05);
+      border: 2px solid rgba(255, 255, 255, 0.1);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.62em; color: var(--text-muted);
       transition: all 0.3s;
     }
     .stage-dot.active {
-      background: rgba(80, 120, 255, 0.3);
-      border-color: #5078ff;
-      color: #7aa2ff;
+      background: var(--accent-glow);
+      border-color: var(--accent);
+      color: var(--accent);
       animation: pulse 1.5s ease-in-out infinite;
     }
     .stage-dot.done {
-      background: rgba(80, 200, 120, 0.3);
-      border-color: #50c878;
-      color: #8fc98f;
+      background: var(--green-glow);
+      border-color: var(--green);
+      color: var(--green);
     }
     .stage-label {
-      font-size: 0.7em;
-      color: #555;
-      text-transform: uppercase;
-      letter-spacing: 0.03em;
+      font-size: 0.66em; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: 0.04em;
+      font-weight: 500;
     }
-    .stage-label.active { color: #7aa2ff; }
-    .stage-label.done { color: #8fc98f; }
+    .stage-label.active { color: var(--accent); }
+    .stage-label.done { color: var(--green); }
 
     @keyframes pulse {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(80, 120, 255, 0.3); }
-      50% { box-shadow: 0 0 0 6px rgba(80, 120, 255, 0); }
+      0%, 100% { box-shadow: 0 0 0 0 rgba(110, 142, 255, 0.25); }
+      50% { box-shadow: 0 0 0 6px rgba(110, 142, 255, 0); }
     }
 
     .progress-bar-wrap {
-      background: rgba(255, 255, 255, 0.06);
-      border-radius: 6px;
-      height: 8px;
-      overflow: hidden;
-      margin-bottom: 8px;
+      background: rgba(255, 255, 255, 0.04);
+      border-radius: 6px; height: 6px;
+      overflow: hidden; margin-bottom: 8px;
     }
     .progress-bar-fill {
       height: 100%;
-      background: linear-gradient(90deg, #5078ff, #50c878);
+      background: linear-gradient(90deg, var(--accent), var(--green));
       border-radius: 6px;
       transition: width 0.3s ease;
       width: 0%;
     }
 
     .progress-stats {
-      display: flex;
-      justify-content: space-between;
-      font-size: 0.78em;
-      color: #888;
+      display: flex; justify-content: space-between;
+      font-size: 0.74em; color: var(--text-secondary);
       font-variant-numeric: tabular-nums;
       margin-bottom: 12px;
     }
 
     .train-log {
-      max-height: 120px;
+      max-height: 100px;
       overflow-y: auto;
-      background: rgba(0, 0, 0, 0.4);
-      border: 1px solid rgba(255, 255, 255, 0.06);
-      border-radius: 6px;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      border-radius: 8px;
       padding: 8px 10px;
-      font-family: 'SF Mono', 'Fira Code', monospace;
-      font-size: 0.72em;
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 0.68em;
       line-height: 1.5;
-      color: #777;
+      color: var(--text-secondary);
       margin-bottom: 12px;
     }
     .train-log::-webkit-scrollbar { width: 4px; }
-    .train-log::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
-
-    #load-result-btn {
-      display: none;
-      width: 100%;
-      padding: 10px;
-      background: rgba(80, 200, 120, 0.2);
-      border: 1px solid rgba(80, 200, 120, 0.4);
-      color: #8fc98f;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 0.9em;
-      font-weight: 500;
-      transition: background 0.2s;
-    }
-    #load-result-btn:hover {
-      background: rgba(80, 200, 120, 0.35);
-    }
+    .train-log::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
 
     .train-error {
       padding: 10px;
-      background: rgba(255, 80, 80, 0.1);
-      border: 1px solid rgba(255, 80, 80, 0.3);
+      background: rgba(255, 80, 80, 0.08);
+      border: 1px solid rgba(255, 80, 80, 0.2);
+      border-radius: 8px;
+      color: var(--red);
+      font-size: 0.8em;
+    }
+
+    /* ─── Floating Toolbar ─── */
+    .toolbar {
+      position: fixed;
+      bottom: 20px; left: 50%;
+      transform: translateX(-50%) translateY(0);
+      display: flex; align-items: center; gap: 2px;
+      background: var(--glass-bg);
+      backdrop-filter: var(--glass-blur);
+      -webkit-backdrop-filter: var(--glass-blur);
+      border: 1px solid var(--glass-border);
+      border-radius: 100px;
+      padding: 5px 6px;
+      z-index: 30;
+      opacity: 0;
+      transform: translateX(-50%) translateY(12px);
+      transition: opacity var(--transition), transform var(--transition);
+      pointer-events: none;
+    }
+    .toolbar.visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+      pointer-events: auto;
+    }
+
+    .toolbar-btn {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      background: none; border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s;
+      position: relative;
+    }
+    .toolbar-btn:hover {
+      color: var(--text-secondary);
+      background: rgba(255, 255, 255, 0.06);
+    }
+    .toolbar-btn.active {
+      color: var(--accent);
+      background: var(--accent-glow);
+    }
+    .toolbar-btn svg { width: 18px; height: 18px; }
+
+    .toolbar-divider {
+      width: 1px; height: 20px;
+      background: rgba(255, 255, 255, 0.06);
+      margin: 0 3px;
+    }
+
+    .toolbar-btn .tooltip {
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 50%; transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.85);
+      color: var(--text-primary);
+      font-size: 0.68em;
+      font-weight: 500;
+      padding: 4px 8px;
       border-radius: 6px;
-      color: #f66;
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.15s;
+    }
+    .toolbar-btn:hover .tooltip { opacity: 1; }
+
+    /* ─── Controls Hint ─── */
+    .controls-hint {
+      position: fixed;
+      bottom: 12px; right: 16px;
+      font-size: 0.68em;
+      color: var(--text-muted);
+      z-index: 20;
+      opacity: 0;
+      transition: opacity var(--transition);
+      pointer-events: none;
+    }
+    .controls-hint.visible { opacity: 1; }
+
+    /* ─── Toast ─── */
+    .toast {
+      position: fixed;
+      top: 60px; left: 50%;
+      transform: translateX(-50%) translateY(-12px);
+      background: var(--glass-bg);
+      backdrop-filter: var(--glass-blur);
+      -webkit-backdrop-filter: var(--glass-blur);
+      border: 1px solid rgba(255, 200, 50, 0.25);
+      color: #ffd666;
+      padding: 10px 20px;
+      border-radius: 12px;
       font-size: 0.82em;
+      z-index: 100;
+      opacity: 0;
+      transition: opacity 0.3s, transform 0.3s;
+      max-width: 440px;
+      text-align: center;
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    .toast-warning { border-color: rgba(255, 200, 50, 0.25); color: #ffd666; }
+    .toast-info { border-color: rgba(110, 142, 255, 0.25); color: var(--accent); }
+
+    /* ─── Status (loading overlay) ─── */
+    #status {
+      position: fixed;
+      bottom: 80px; left: 50%;
+      transform: translateX(-50%);
+      background: var(--glass-bg);
+      backdrop-filter: var(--glass-blur);
+      -webkit-backdrop-filter: var(--glass-blur);
+      border: 1px solid var(--glass-border);
+      padding: 8px 20px;
+      border-radius: 100px;
+      font-size: 0.82em;
+      display: none;
+      z-index: 60;
+      color: var(--text-secondary);
+    }
+
+    .loading-text, .error-text {
+      font-size: 1.1em;
+      color: var(--text-secondary);
+    }
+    .error-text { color: var(--red); }
+
+    /* ─── Drag overlay (whole page) ─── */
+    #drag-overlay {
+      position: fixed; inset: 0;
+      background: rgba(110, 142, 255, 0.06);
+      border: 2px dashed rgba(110, 142, 255, 0.3);
+      z-index: 200;
+      display: none;
+      pointer-events: none;
     }
   </style>
 </head>
 <body>
   <canvas id="canvas"></canvas>
 
-  <div id="overlay">
-    <div class="drop-zone">
-      <h1>Gaussian Splat Viewer</h1>
-      <p>Drop a .ply or .splat file here</p>
-      <button id="file-btn">Choose File</button>
+  <!-- Wordmark -->
+  <div class="wordmark">splat</div>
 
-      <div class="train-section">
-        <div class="or-divider">or train a new model</div>
-        <div class="train-header">Upload Video</div>
-        <div id="train-upload" class="train-upload-area">
-          <div class="train-upload-label">Drop a video or click to select</div>
-          <div id="train-filename" class="train-upload-filename"></div>
-          <input type="file" id="train-file-input" accept=".mp4,.mov,.avi,.mkv" hidden>
-        </div>
-        <div class="train-config">
-          <label>
-            Iterations
-            <input type="number" id="train-iterations" value="30000" min="1000" max="100000" step="1000">
-          </label>
-          <label>
-            FPS
-            <input type="number" id="train-fps" value="6" min="1" max="30" step="1">
-          </label>
-        </div>
-        <button id="train-btn" disabled>Start Training</button>
+  <!-- Stats Pill -->
+  <div id="stats"></div>
+
+  <!-- Page-level drag overlay -->
+  <div id="drag-overlay"></div>
+
+  <!-- Bottom Drawer -->
+  <div class="drawer-backdrop" id="drawer-backdrop"></div>
+  <div class="drawer" id="drawer">
+    <div class="drawer-handle"><div class="drawer-handle-pill"></div></div>
+    <div class="drawer-content">
+
+      <!-- Drop Target -->
+      <div class="drop-target" id="drop-target">
+        <svg class="drop-target-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/>
+          <line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+        <span class="drop-target-text">Drop .ply or .splat file</span>
+        <span class="drop-target-hint">or click to browse</span>
       </div>
 
+      <!-- Server Files -->
+      <div class="section-divider"><span>from server</span></div>
+      <div id="file-list" class="file-list">
+        <div class="file-list-loading">Scanning...</div>
+      </div>
+
+      <!-- Train Toggle -->
+      <button class="train-toggle" id="train-toggle">
+        Train from video
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+
+      <!-- Train Section (collapsed by default) -->
+      <div class="train-section" id="train-section">
+        <div class="train-section-inner">
+          <div id="train-upload" class="train-upload-area">
+            <div class="train-upload-label">Drop a video or click to select</div>
+            <div id="train-filename" class="train-upload-filename"></div>
+            <input type="file" id="train-file-input" accept=".mp4,.mov,.avi,.mkv" hidden>
+          </div>
+          <div class="train-config">
+            <label>
+              Iterations
+              <input type="number" id="train-iterations" value="30000" min="1000" max="100000" step="1000">
+            </label>
+            <label>
+              FPS
+              <input type="number" id="train-fps" value="6" min="1" max="30" step="1">
+            </label>
+          </div>
+          <button id="train-btn" class="btn-primary" disabled>Start Training</button>
+        </div>
+      </div>
+
+      <!-- Training Progress -->
       <div id="training-progress">
         <div class="stage-indicator">
           <div class="stage-step">
@@ -569,29 +689,80 @@
         </div>
         <div id="train-log" class="train-log"></div>
         <div id="train-error" class="train-error" style="display:none"></div>
-        <button id="load-result-btn">Load Result in Viewer</button>
+        <button id="load-result-btn" class="btn-success" style="display:none">Load Result</button>
       </div>
 
-      <div class="file-browser">
-        <div class="or-divider">or load from server</div>
-        <div class="file-browser-header">Available Splats</div>
-        <div id="file-list" class="file-list">
-          <div class="file-list-loading">Scanning...</div>
-        </div>
-      </div>
     </div>
   </div>
 
-  <div id="stats"></div>
-  <div id="status"></div>
+  <!-- Floating Toolbar (viewing state) -->
+  <div class="toolbar" id="toolbar">
+    <!-- Overlay toggles -->
+    <button class="toolbar-btn active" id="tb-bbox" data-overlay="Bounding Box">
+      <span class="tooltip">Bounding Box</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+      </svg>
+    </button>
+    <button class="toolbar-btn active" id="tb-ground" data-overlay="Ground Plane">
+      <span class="tooltip">Ground Plane</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="15" width="18" height="2" rx="1" ry="1" fill="currentColor" opacity="0.3"/>
+        <line x1="3" y1="16" x2="21" y2="16"/>
+        <line x1="6" y1="19" x2="18" y2="19" opacity="0.3"/>
+      </svg>
+    </button>
+    <button class="toolbar-btn active" id="tb-center" data-overlay="Center Point">
+      <span class="tooltip">Center Point</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"/>
+        <line x1="12" y1="2" x2="12" y2="6"/>
+        <line x1="12" y1="18" x2="12" y2="22"/>
+        <line x1="2" y1="12" x2="6" y2="12"/>
+        <line x1="18" y1="12" x2="22" y2="12"/>
+      </svg>
+    </button>
+    <button class="toolbar-btn active" id="tb-ring" data-overlay="Center Ring">
+      <span class="tooltip">Center Ring</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <ellipse cx="12" cy="12" rx="10" ry="4"/>
+      </svg>
+    </button>
 
-  <div id="overlay-panel-wrap">
-    <div id="overlay-panel-header">Overlays</div>
-    <div id="overlay-panel"></div>
+    <div class="toolbar-divider"></div>
+
+    <!-- Heatmap cycle -->
+    <button class="toolbar-btn" id="tb-heatmap">
+      <span class="tooltip" id="tb-heatmap-label">Heatmap: Off</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2c0 4-4 6-4 10a4 4 0 0 0 8 0c0-4-4-6-4-10z"/>
+        <path d="M12 22v-2"/>
+      </svg>
+    </button>
+
+    <div class="toolbar-divider"></div>
+
+    <!-- Open drawer -->
+    <button class="toolbar-btn" id="tb-drawer">
+      <span class="tooltip">Files</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="18 15 12 9 6 15"/>
+      </svg>
+    </button>
   </div>
 
-  <div class="controls-hint">
-    LMB: orbit &nbsp; RMB: pan &nbsp; Scroll: zoom &nbsp; Click box: select &nbsp; Drag face: resize &nbsp; ESC: deselect
+  <!-- Controls hint -->
+  <div class="controls-hint" id="controls-hint">
+    LMB orbit &middot; RMB pan &middot; Scroll zoom &middot; Click box select &middot; Drag face resize &middot; ESC deselect
+  </div>
+
+  <!-- Hidden status -->
+  <div id="status"></div>
+
+  <!-- These exist for backward compat with main.ts but are hidden -->
+  <div id="overlay" style="display:none;position:fixed;inset:0;z-index:45;pointer-events:none;"></div>
+  <div id="overlay-panel-wrap" style="display:none;">
+    <div id="overlay-panel"></div>
   </div>
 
   <script type="module" src="./src/main.ts"></script>
