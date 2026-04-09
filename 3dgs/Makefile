@@ -8,9 +8,10 @@ ITERATIONS  := 30000
 FPS         := 6
 TIMESTAMP   := $(shell date +%H%M)
 
-# CUDA + headless COLMAP
+# CUDA + headless COLMAP + workspace Python libs
 export PATH := /usr/local/cuda/bin:$(PATH)
 export QT_QPA_PLATFORM := offscreen
+export PYTHONPATH := /workspace/libs:$(PYTHONPATH)
 
 # Derived paths
 FRAMES_DIR  := $(SCENE)/input
