@@ -5,7 +5,7 @@ VIDEO       := better_pov.MOV
 SCENE       := data/better_pov
 MODEL       := output/better_pov
 ITERATIONS  := 30000
-FPS         := 2
+FPS         := 6
 
 # CUDA + headless COLMAP
 export PATH := /usr/local/cuda/bin:$(PATH)
