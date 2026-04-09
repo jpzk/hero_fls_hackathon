@@ -1,9 +1,15 @@
 # 3D Gaussian Splatting pipeline: video → .splat
-# Usage: make splat
+# Usage:
+#   make splat                                    # use default video
+#   make splat VIDEO_URL=https://example.com/v.MOV  # download video first
+#   make splat FPS=2                              # override frame rate
+#   make splat ITERATIONS=7000                    # override training iterations
 
-VIDEO       := IMG_7249.MOV
-SCENE       := data/IMG_7249
-MODEL       := output/IMG_7249
+GS          := 3dgs
+VIDEO_URL   ?=
+VIDEO       := $(GS)/input/IMG_7249.MOV
+SCENE       := $(GS)/data/IMG_7249
+MODEL       := $(GS)/output/IMG_7249
 ITERATIONS  := 30000
 FPS         := 6
 TIMESTAMP   := $(shell date +%H%M)
@@ -17,25 +23,31 @@ export PYTHONPATH := /workspace/libs:$(PYTHONPATH)
 FRAMES_DIR  := $(SCENE)/input
 SPARSE_DIR  := $(SCENE)/sparse/0
 PLY         := $(MODEL)/point_cloud/iteration_$(ITERATIONS)/point_cloud.ply
-SPLAT_OUT   := output/output_$(TIMESTAMP).splat
-PLY_OUT     := output/output_$(TIMESTAMP).ply
+SPLAT_OUT   := $(GS)/output/output_$(TIMESTAMP).splat
+PLY_OUT     := $(GS)/output/output_$(TIMESTAMP).ply
 
-VIEWER_DIR  := ../viewer_overlays
+VIEWER_DIR  := viewer_overlays
 VIEWER_PID  := /tmp/viewer.pid
 
 .PHONY: splat clean deps viewer viewer-stop
 
+# Step 0: Download video if VIDEO_URL is set
+ifneq ($(VIDEO_URL),)
+$(VIDEO):
+	curl -L -o $(VIDEO) "$(VIDEO_URL)"
+endif
+
 # Full pipeline
 splat: $(PLY)
 	cp $(PLY) $(PLY_OUT)
-	python ply_to_splat.py $(PLY) $(SPLAT_OUT)
+	cd $(GS) && python ply_to_splat.py $(abspath $(PLY)) $(abspath $(SPLAT_OUT))
 	@echo "Done: $(SPLAT_OUT) + $(PLY_OUT)"
 
-# Step 0: Install CUDA submodules if needed
+# Install CUDA submodules if needed
 deps:
-	pip install --break-system-packages --no-build-isolation submodules/diff-gaussian-rasterization
-	pip install --break-system-packages --no-build-isolation submodules/simple-knn
-	pip install --break-system-packages --no-build-isolation submodules/fused-ssim
+	cd $(GS) && pip install --break-system-packages --no-build-isolation submodules/diff-gaussian-rasterization
+	cd $(GS) && pip install --break-system-packages --no-build-isolation submodules/simple-knn
+	cd $(GS) && pip install --break-system-packages --no-build-isolation submodules/fused-ssim
 
 # Step 1: Extract frames from video
 $(FRAMES_DIR): $(VIDEO)
@@ -44,16 +56,15 @@ $(FRAMES_DIR): $(VIDEO)
 	@echo "Extracted $$(ls $(FRAMES_DIR)/*.jpg | wc -l) frames at $(FPS) fps"
 
 # Step 2: COLMAP — feature extraction, matching, reconstruction, undistortion
-# --no_gpu: use CPU SIFT (avoids OpenGL requirement on headless servers)
 $(SPARSE_DIR): $(FRAMES_DIR)
-	python convert.py -s $(SCENE) --camera OPENCV
+	cd $(GS) && python convert.py -s $(abspath $(SCENE)) --camera OPENCV
 	@echo "COLMAP reconstruction complete"
 
 # Step 3: Train 3D Gaussian Splatting
 $(PLY): $(SPARSE_DIR)
-	python train.py \
-		-s $(SCENE) \
-		-m $(MODEL) \
+	cd $(GS) && python train.py \
+		-s $(abspath $(SCENE)) \
+		-m $(abspath $(MODEL)) \
 		--iterations $(ITERATIONS) \
 		--save_iterations $(ITERATIONS) \
 		--disable_viewer
