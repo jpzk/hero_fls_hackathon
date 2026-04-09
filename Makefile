@@ -79,7 +79,7 @@ deps:
 # Step 1: Extract frames from video
 $(FRAMES_DIR): $(VIDEO)
 	mkdir -p $(FRAMES_DIR)
-	ffmpeg -i $(VIDEO) -qscale:v 1 -qmin 1 -vf fps=$(FPS) $(FRAMES_DIR)/%04d.jpg
+	ffmpeg -i $(VIDEO) -qscale:v 1 -qmin 1 -vf "fps=$(FPS),scale='if(gt(iw,ih),min(1920,iw),-2)':'if(gt(ih,iw),min(1080,ih),-2)'" $(FRAMES_DIR)/%04d.jpg
 	@echo "Extracted $$(ls $(FRAMES_DIR)/*.jpg | wc -l) frames at $(FPS) fps"
 
 # Step 2: COLMAP — feature extraction, matching, reconstruction, undistortion
