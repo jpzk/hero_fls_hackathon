@@ -7,6 +7,9 @@ MODEL       := output/better_pov
 ITERATIONS  := 30000
 FPS         := 2
 
+# CUDA
+export PATH := /usr/local/cuda/bin:$(PATH)
+
 # Derived paths
 FRAMES_DIR  := $(SCENE)/input
 SPARSE_DIR  := $(SCENE)/sparse/0
@@ -20,9 +23,9 @@ splat: $(SPLAT)
 
 # Step 0: Install CUDA submodules if needed
 deps:
-	pip install submodules/diff-gaussian-rasterization
-	pip install submodules/simple-knn
-	pip install submodules/fused-ssim
+	pip install --break-system-packages --no-build-isolation submodules/diff-gaussian-rasterization
+	pip install --break-system-packages --no-build-isolation submodules/simple-knn
+	pip install --break-system-packages --no-build-isolation submodules/fused-ssim
 
 # Step 1: Extract frames from video
 $(FRAMES_DIR): $(VIDEO)
