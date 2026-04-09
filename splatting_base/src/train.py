@@ -126,6 +126,11 @@ def train(
     cameras, points3d, colors3d = load_colmap_scene(model_dir, image_dir)
     print(f"Loaded {len(cameras)} cameras, {len(points3d)} points")
 
+    # Compute scene extent for scale-aware densification
+    scene_center = points3d.mean(axis=0)
+    scene_extent = np.linalg.norm(points3d - scene_center, axis=1).max()
+    print(f"Scene extent: {scene_extent:.3f}")
+
     # Initialize gaussian model
     model = GaussianModel(points3d, colors3d, device=device)
 
@@ -208,18 +213,22 @@ def train(
                     mask = (avg_grads.squeeze() > config.densify_grad_thresh)
 
                     if mask.any():
-                        densify_and_split(model, optimizer, mask)
+                        densify(model, optimizer, mask, scene_extent)
 
-                    # Prune low opacity
-                    prune_mask = (model.opacities < config.prune_opacity_thresh).squeeze()
+                    # Prune low opacity or oversized gaussians
+                    max_scales = model.scales_activated.max(dim=-1).values
+                    prune_mask = (
+                        (model.opacities < config.prune_opacity_thresh).squeeze()
+                        | (max_scales > scene_extent * 0.1)
+                    )
                     if prune_mask.any():
                         prune_gaussians(model, optimizer, ~prune_mask)
 
                     model.xyz_gradient_accum.zero_()
                     model.denom.zero_()
 
-            # Opacity reset
-            if step % config.opacity_reset_every == 0:
+            # Opacity reset (only during densification, never at final step)
+            if step % config.opacity_reset_every == 0 and step < config.densify_until:
                 model.opacities_raw.data.fill_(
                     math.log(0.01 / (1 - 0.01))  # inverse sigmoid of 0.01
                 )
@@ -251,35 +260,56 @@ def train(
     return output_path
 
 
-def densify_and_split(model, optimizer, mask):
-    """Split gaussians with high gradients."""
-    n_new = mask.sum().item()
-    if n_new == 0:
+def densify(model, optimizer, grad_mask, scene_extent):
+    """Densify gaussians: clone small ones, split large ones."""
+    if not grad_mask.any():
         return
 
-    # Clone parameters for selected gaussians
-    new_means = model.means.data[mask].repeat(2, 1)
-    new_scales = model.scales.data[mask].repeat(2, 1) - math.log(1.6)
-    new_quats = model.quats.data[mask].repeat(2, 1)
-    new_opacities = model.opacities_raw.data[mask].repeat(2)
-    new_sh_dc = model.sh_dc.data[mask].repeat(2, 1, 1)
-    new_sh_rest = model.sh_rest.data[mask].repeat(2, 1, 1)
+    # Separate into split (large) and clone (small) based on scale
+    max_scales = model.scales_activated.data.max(dim=-1).values
+    split_thresh = scene_extent * 0.01
+    is_large = max_scales > split_thresh
 
-    # Add noise to split
-    stds = model.scales_activated.data[mask].repeat(2, 1)
-    noise = torch.randn_like(new_means) * stds
-    new_means += noise
+    split_mask = grad_mask & is_large
+    clone_mask = grad_mask & ~is_large
 
-    # Remove old, add new
-    keep = ~mask
-    _prune_and_append(model, optimizer, keep, {
-        "means": new_means,
-        "scales": new_scales,
-        "quats": new_quats,
-        "opacities_raw": new_opacities,
-        "sh_dc": new_sh_dc,
-        "sh_rest": new_sh_rest,
-    })
+    all_new = []
+
+    # Split: remove originals, add 2 smaller copies with position noise
+    if split_mask.any():
+        means = model.means.data[split_mask]
+        stds = model.scales_activated.data[split_mask]
+        all_new.append({
+            "means": means.repeat(2, 1) + torch.randn(means.shape[0] * 2, 3, device=model.device) * stds.repeat(2, 1),
+            "scales": model.scales.data[split_mask].repeat(2, 1) - math.log(1.6),
+            "quats": model.quats.data[split_mask].repeat(2, 1),
+            "opacities_raw": model.opacities_raw.data[split_mask].repeat(2),
+            "sh_dc": model.sh_dc.data[split_mask].repeat(2, 1, 1),
+            "sh_rest": model.sh_rest.data[split_mask].repeat(2, 1, 1),
+        })
+
+    # Clone: keep originals, add 1 copy at same scale
+    if clone_mask.any():
+        all_new.append({
+            "means": model.means.data[clone_mask],
+            "scales": model.scales.data[clone_mask],
+            "quats": model.quats.data[clone_mask],
+            "opacities_raw": model.opacities_raw.data[clone_mask],
+            "sh_dc": model.sh_dc.data[clone_mask],
+            "sh_rest": model.sh_rest.data[clone_mask],
+        })
+
+    if not all_new:
+        return
+
+    # Merge all new params
+    merged = {}
+    for key in all_new[0]:
+        merged[key] = torch.cat([p[key] for p in all_new], dim=0)
+
+    # Remove only split originals (keep clone originals)
+    keep = ~split_mask
+    _prune_and_append(model, optimizer, keep, merged)
 
 
 def prune_gaussians(model, optimizer, keep_mask):
