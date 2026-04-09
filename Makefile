@@ -29,7 +29,23 @@ PLY_OUT     := $(GS)/output/output_$(TIMESTAMP).ply
 VIEWER_DIR  := viewer_overlays
 VIEWER_PID  := /tmp/viewer.pid
 
-.PHONY: splat clean deps viewer viewer-stop
+.PHONY: help splat clean deps viewer viewer-stop
+
+help: ## Show this help
+	@echo "Usage: make <target> [PARAM=value ...]"
+	@echo ""
+	@echo "Targets:"
+	@echo "  splat          Run full pipeline: video -> frames -> COLMAP -> train -> .splat"
+	@echo "  deps           Install CUDA submodules (diff-rasterization, simple-knn, fused-ssim)"
+	@echo "  viewer         Start the splat viewer server in the background"
+	@echo "  viewer-stop    Stop the viewer server"
+	@echo "  clean          Remove scene data and model output"
+	@echo ""
+	@echo "Parameters:"
+	@echo "  VIDEO_URL      Download video from URL (default: use local file)"
+	@echo "  FPS            Frame extraction rate (default: $(FPS))"
+	@echo "  ITERATIONS     Training iterations (default: $(ITERATIONS))"
+	@echo "  VIDEO          Path to input video (default: $(VIDEO))"
 
 # Step 0: Download video if VIDEO_URL is set
 ifneq ($(VIDEO_URL),)
