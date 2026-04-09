@@ -35,8 +35,9 @@ $(FRAMES_DIR): $(VIDEO)
 	@echo "Extracted $$(ls $(FRAMES_DIR)/*.jpg | wc -l) frames at $(FPS) fps"
 
 # Step 2: COLMAP — feature extraction, matching, reconstruction, undistortion
+# --no_gpu: use CPU SIFT (avoids OpenGL requirement on headless servers)
 $(SPARSE_DIR): $(FRAMES_DIR)
-	python convert.py -s $(SCENE) --camera OPENCV
+	python convert.py -s $(SCENE) --camera OPENCV --no_gpu
 	@echo "COLMAP reconstruction complete"
 
 # Step 3: Train 3D Gaussian Splatting
