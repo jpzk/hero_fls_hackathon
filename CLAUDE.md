@@ -13,4 +13,5 @@ Multi-experiment repo for video-to-3D gaussian splatting.
 - Repo: `/root/splatting`
 - Deploy key: `~/.ssh/splatting_deploy_key` (read-only)
 - Pull: `cd /root/splatting && git pull`
+- Viewer: `https://ldk7adzmca00ve-3002.proxy.runpod.net/`
 - **NEVER delete or `rm -rf` the `output/` folder on production** — it contains previous training results. Output files use `output_HHMM.{ply,splat}` naming to avoid overwriting.

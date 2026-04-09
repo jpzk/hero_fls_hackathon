@@ -15,6 +15,7 @@ import { spawn, type Subprocess } from "bun";
 const PORT = parseInt(process.env.PORT || "3001", 10);
 const SPLAT_DIR = resolve(process.env.SPLAT_DIR || "/root/splatting/3dgs/output");
 const PIPELINE_DIR = resolve(process.env.PIPELINE_DIR || "/root/splatting/3dgs");
+const API_PROXY = process.env.API_PROXY || ""; // e.g. "http://103.196.86.242:3002"
 
 // --- Bundle ---
 
@@ -223,6 +224,47 @@ async function startTraining(videoPath: string, iterations: number, fps: number)
   broadcast(currentJob);
 }
 
+// --- Proxy helpers ---
+
+async function proxyRequest(req: Request, path: string): Promise<Response> {
+  const target = API_PROXY + path;
+  const headers = new Headers(req.headers);
+  headers.delete("host");
+  const proxyReq = new Request(target, {
+    method: req.method,
+    headers,
+    body: req.body,
+    redirect: "follow",
+  });
+  const resp = await fetch(proxyReq);
+  const respHeaders = new Headers(resp.headers);
+  respHeaders.set("Access-Control-Allow-Origin", "*");
+  return new Response(resp.body, {
+    status: resp.status,
+    headers: respHeaders,
+  });
+}
+
+// WebSocket proxy: connect client ↔ remote WS
+const wsProxyMap = new Map<any, WebSocket>();
+
+function proxyWebSocket(clientWs: any) {
+  const wsUrl = API_PROXY.replace(/^http/, "ws") + "/ws";
+  const remote = new WebSocket(wsUrl);
+  wsProxyMap.set(clientWs, remote);
+  remote.onmessage = (e) => {
+    try { clientWs.send(e.data); } catch {}
+  };
+  remote.onclose = () => {
+    try { clientWs.close(); } catch {}
+    wsProxyMap.delete(clientWs);
+  };
+  remote.onerror = () => {
+    try { clientWs.close(); } catch {}
+    wsProxyMap.delete(clientWs);
+  };
+}
+
 // --- File scanner ---
 
 async function findSplatFiles(dir: string, base: string): Promise<{ name: string; path: string; size: number }[]> {
@@ -265,14 +307,36 @@ const server = Bun.serve({
     const url = new URL(req.url);
     const path = url.pathname;
 
+    // --- Proxy mode: forward API/WS/splats to remote server ---
+    if (API_PROXY) {
+      if (path === "/ws") {
+        if (server.upgrade(req)) return undefined as any;
+        return new Response("WebSocket upgrade failed", { status: 400 });
+      }
+      if (path.startsWith("/api/") || path.startsWith("/splats/")) {
+        return proxyRequest(req, path);
+      }
+      if (req.method === "OPTIONS") {
+        return new Response(null, {
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type",
+          },
+        });
+      }
+    }
+
+    // --- Local mode: handle API/WS directly ---
+
     // --- WebSocket upgrade ---
-    if (path === "/ws") {
+    if (path === "/ws" && !API_PROXY) {
       if (server.upgrade(req)) return undefined as any;
       return new Response("WebSocket upgrade failed", { status: 400 });
     }
 
     // --- API: list splat files ---
-    if (path === "/api/splats") {
+    if (path === "/api/splats" && !API_PROXY) {
       const files = await findSplatFiles(SPLAT_DIR, SPLAT_DIR);
       return Response.json(files, {
         headers: { "Access-Control-Allow-Origin": "*" },
@@ -280,14 +344,14 @@ const server = Bun.serve({
     }
 
     // --- API: training status ---
-    if (path === "/api/status") {
+    if (path === "/api/status" && !API_PROXY) {
       return Response.json(currentJob, {
         headers: { "Access-Control-Allow-Origin": "*" },
       });
     }
 
     // --- API: start training ---
-    if (path === "/api/train" && req.method === "POST") {
+    if (path === "/api/train" && req.method === "POST" && !API_PROXY) {
       if (currentJob.status === "running") {
         return Response.json({ error: "A training job is already running" }, {
           status: 409,
@@ -327,7 +391,7 @@ const server = Bun.serve({
     }
 
     // --- CORS preflight ---
-    if (req.method === "OPTIONS") {
+    if (req.method === "OPTIONS" && !API_PROXY) {
       return new Response(null, {
         headers: {
           "Access-Control-Allow-Origin": "*",
@@ -338,7 +402,7 @@ const server = Bun.serve({
     }
 
     // --- Serve splat files from SPLAT_DIR ---
-    if (path.startsWith("/splats/")) {
+    if (path.startsWith("/splats/") && !API_PROXY) {
       const rel = path.slice("/splats/".length);
       const requested = resolve(SPLAT_DIR, rel);
       const realRequested = await realpath(requested).catch(() => null);
@@ -387,20 +451,30 @@ const server = Bun.serve({
 
   websocket: {
     open(ws) {
-      wsClients.add(ws);
-      // Send current state on connect
-      ws.send(JSON.stringify(currentJob));
+      if (API_PROXY) {
+        proxyWebSocket(ws);
+      } else {
+        wsClients.add(ws);
+        ws.send(JSON.stringify(currentJob));
+      }
     },
     close(ws) {
-      wsClients.delete(ws);
+      if (API_PROXY) {
+        const remote = wsProxyMap.get(ws);
+        if (remote) { remote.close(); wsProxyMap.delete(ws); }
+      } else {
+        wsClients.delete(ws);
+      }
     },
-    message(ws, msg) {
-      // No client→server messages needed for now
-    },
+    message(ws, msg) {},
   },
 });
 
 console.log(`\nGaussian Splat Viewer: http://localhost:${server.port}`);
-console.log(`Scanning for splats in: ${SPLAT_DIR}`);
-console.log(`Pipeline directory: ${PIPELINE_DIR}`);
+if (API_PROXY) {
+  console.log(`PROXY MODE: API requests → ${API_PROXY}`);
+} else {
+  console.log(`Scanning for splats in: ${SPLAT_DIR}`);
+  console.log(`Pipeline directory: ${PIPELINE_DIR}`);
+}
 console.log("Watching for changes...\n");
