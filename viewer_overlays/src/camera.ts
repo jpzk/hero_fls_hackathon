@@ -23,6 +23,7 @@ export class OrbitCamera {
     canvas.addEventListener("mouseup", this.onMouseUp);
     canvas.addEventListener("wheel", this.onWheel, { passive: false });
     canvas.addEventListener("contextmenu", e => e.preventDefault());
+    window.addEventListener("keydown", this.onKeyDown);
 
     // Touch support
     canvas.addEventListener("touchstart", this.onTouchStart, { passive: false });
@@ -111,6 +112,49 @@ export class OrbitCamera {
 
   private onTouchEnd = () => {
     this.dragging = false;
+  };
+
+  private onKeyDown = (e: KeyboardEvent) => {
+    if (!this.enabled) return;
+    const step = this.distance * 0.05;
+    const right = this.getRight();
+    const up = this.getUp();
+
+    switch (e.key) {
+      case "ArrowLeft":
+        this.target[0] -= right[0] * step;
+        this.target[1] -= right[1] * step;
+        this.target[2] -= right[2] * step;
+        break;
+      case "ArrowRight":
+        this.target[0] += right[0] * step;
+        this.target[1] += right[1] * step;
+        this.target[2] += right[2] * step;
+        break;
+      case "ArrowUp":
+        if (e.shiftKey) {
+          // Shift+Up = move forward (zoom in)
+          this.distance = Math.max(0.1, this.distance * 0.9);
+        } else {
+          this.target[0] += up[0] * step;
+          this.target[1] += up[1] * step;
+          this.target[2] += up[2] * step;
+        }
+        break;
+      case "ArrowDown":
+        if (e.shiftKey) {
+          // Shift+Down = move backward (zoom out)
+          this.distance = Math.min(500, this.distance * 1.1);
+        } else {
+          this.target[0] -= up[0] * step;
+          this.target[1] -= up[1] * step;
+          this.target[2] -= up[2] * step;
+        }
+        break;
+      default:
+        return; // don't preventDefault for other keys
+    }
+    e.preventDefault();
   };
 
   getPosition(): [number, number, number] {
