@@ -1,7 +1,0 @@
-torch>=2.1.0
-gsplat>=1.0.0
-numpy
-Pillow
-plyfile
-tqdm
-opencv-python-headless
