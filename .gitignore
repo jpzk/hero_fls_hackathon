@@ -12,3 +12,9 @@ bunfig.toml
 .env
 
 Assets/*
+
+node_modules/
+.next/
+*.ply
+*.splat
+.DS_Store
