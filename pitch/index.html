@@ -1,0 +1,2030 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HERO Scanner</title>
+  <!-- EmailJS SDK — free automatic email sending, no backend needed -->
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --yellow: #FFD600;
+      --yellow-hover: #E6C200;
+      --black: #1A1A1A;
+      --white: #FFFFFF;
+      --gray-light: #F5F5F5;
+      --gray-medium: #E8E8E8;
+      --gray-dark: #4A4A4A;
+      --blue: #0066FF;
+      --green: #22C55E;
+      --red: #EF4444;
+      --font: "DM Sans", sans-serif;
+      --radius-card: 16px;
+      --radius-btn: 50px;
+      --shadow-card: 0 2px 12px rgba(0,0,0,0.08);
+      --shadow-nav: 0 1px 4px rgba(0,0,0,0.06);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font);
+      background: #f0f0f0;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      padding: 24px 0;
+      gap: 48px;
+      flex-wrap: wrap;
+    }
+
+    /* ── DEVICE SHELL ── */
+    .device {
+      width: 390px;
+      min-height: 844px;
+      background: var(--white);
+      border-radius: 40px;
+      overflow: hidden;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.18);
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .device-label {
+      text-align: center;
+      font-family: var(--font);
+      font-size: 13px;
+      font-weight: 600;
+      color: #999;
+      margin-bottom: 12px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    /* ── STATUS BAR ── */
+    .status-bar {
+      background: var(--white);
+      padding: 14px 24px 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--black);
+      flex-shrink: 0;
+    }
+    .status-bar .time { font-size: 15px; font-weight: 700; }
+    .status-icons { display: flex; gap: 6px; align-items: center; }
+    .status-icons svg { width: 16px; height: 16px; }
+
+    /* ── NAV ── */
+    .nav {
+      background: var(--white);
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: var(--shadow-nav);
+      flex-shrink: 0;
+      border-bottom: 1px solid var(--gray-medium);
+    }
+    .nav-logo {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--black);
+      letter-spacing: -0.5px;
+    }
+    .nav-logo span { color: var(--yellow); }
+    .nav-back {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--black);
+      cursor: pointer;
+      background: none;
+      border: none;
+    }
+    .nav-icon {
+      width: 36px; height: 36px;
+      background: var(--gray-light);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+    }
+
+    /* ── SCREENS ── */
+    .screen {
+      display: none;
+      flex-direction: column;
+      flex: 1;
+      overflow-y: auto;
+    }
+    .screen.active { display: flex; }
+
+    /* ── SCREEN 1: HOME ── */
+    .home-hero {
+      background: var(--black);
+      padding: 40px 24px 48px;
+      position: relative;
+      overflow: hidden;
+    }
+    .home-hero::before {
+      content: '';
+      position: absolute;
+      top: -60px; right: -60px;
+      width: 200px; height: 200px;
+      background: var(--yellow);
+      border-radius: 50%;
+      opacity: 0.08;
+    }
+    .home-hero::after {
+      content: '';
+      position: absolute;
+      bottom: -40px; left: -40px;
+      width: 150px; height: 150px;
+      background: var(--yellow);
+      border-radius: 50%;
+      opacity: 0.06;
+    }
+    .home-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255,214,0,0.15);
+      border: 1px solid rgba(255,214,0,0.3);
+      color: var(--yellow);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: 50px;
+      margin-bottom: 20px;
+    }
+    .home-badge-dot {
+      width: 6px; height: 6px;
+      background: var(--yellow);
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.8); }
+    }
+    .home-hero h1 {
+      font-size: 32px;
+      font-weight: 800;
+      color: var(--white);
+      line-height: 1.15;
+      margin-bottom: 12px;
+      position: relative;
+      z-index: 1;
+    }
+    .home-hero h1 span { color: var(--yellow); }
+    .home-hero p {
+      font-size: 15px;
+      color: rgba(255,255,255,0.65);
+      line-height: 1.6;
+      position: relative;
+      z-index: 1;
+    }
+
+    .home-scan-btn {
+      margin: 28px 24px 0;
+      background: var(--yellow);
+      color: var(--black);
+      border: none;
+      border-radius: var(--radius-btn);
+      padding: 18px 32px;
+      font-family: var(--font);
+      font-size: 17px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: background 0.2s, transform 0.1s;
+      box-shadow: 0 4px 20px rgba(255,214,0,0.35);
+    }
+    .home-scan-btn:hover { background: var(--yellow-hover); }
+    .home-scan-btn:active { transform: scale(0.98); }
+    .btn-icon {
+      width: 28px; height: 28px;
+      background: var(--black);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .btn-icon svg { width: 14px; height: 14px; }
+
+    .home-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
+      padding: 24px 24px 0;
+    }
+    .stat-card {
+      background: var(--gray-light);
+      border-radius: var(--radius-card);
+      padding: 16px 12px;
+      text-align: center;
+    }
+    .stat-number {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--black);
+    }
+    .stat-label {
+      font-size: 11px;
+      color: var(--gray-dark);
+      margin-top: 4px;
+      line-height: 1.3;
+    }
+
+    .section-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--black);
+      padding: 24px 24px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .section-accent {
+      width: 4px; height: 20px;
+      background: var(--yellow);
+      border-radius: 2px;
+    }
+
+    .recent-scans { padding: 0 24px 24px; display: flex; flex-direction: column; gap: 12px; }
+    .scan-item {
+      background: var(--white);
+      border: 1px solid var(--gray-medium);
+      border-radius: var(--radius-card);
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      cursor: pointer;
+      transition: box-shadow 0.2s;
+      box-shadow: var(--shadow-card);
+    }
+    .scan-item:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+    .scan-thumb {
+      width: 48px; height: 48px;
+      background: var(--black);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .scan-thumb svg { width: 24px; height: 24px; }
+    .scan-info { flex: 1; }
+    .scan-name { font-size: 14px; font-weight: 700; color: var(--black); }
+    .scan-meta { font-size: 12px; color: var(--gray-dark); margin-top: 2px; }
+    .scan-arrow { color: var(--gray-dark); }
+
+    /* ── SCAN MODE TOGGLE ── */
+    .scan-mode-bar {
+      position: absolute;
+      top: 60px; left: 50%; transform: translateX(-50%);
+      z-index: 10;
+      background: rgba(0,0,0,0.55);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 50px;
+      display: flex;
+      padding: 4px;
+      gap: 2px;
+    }
+    .scan-mode-btn {
+      padding: 9px 20px;
+      border-radius: 50px;
+      border: none;
+      background: transparent;
+      color: rgba(255,255,255,0.6);
+      font-family: var(--font);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .scan-mode-btn svg { width: 14px; height: 14px; }
+    .scan-mode-btn.active {
+      background: var(--yellow);
+      color: var(--black);
+    }
+
+    /* Upload Mode */
+    .upload-view {
+      display: none;
+      flex: 1;
+      background: #0a0a0a;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      gap: 0;
+    }
+    .upload-view.visible { display: flex; }
+
+    .upload-zone {
+      width: 100%;
+      border: 2px dashed rgba(255,214,0,0.4);
+      border-radius: 20px;
+      padding: 36px 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+    .upload-zone::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at 50% 50%, rgba(255,214,0,0.04) 0%, transparent 70%);
+    }
+    .upload-zone:hover, .upload-zone.drag-over {
+      border-color: var(--yellow);
+      background: rgba(255,214,0,0.04);
+    }
+    .upload-icon-wrap {
+      width: 72px; height: 72px;
+      background: rgba(255,214,0,0.1);
+      border-radius: 20px;
+      display: flex; align-items: center; justify-content: center;
+      border: 1px solid rgba(255,214,0,0.2);
+    }
+    .upload-icon-wrap svg { width: 32px; height: 32px; }
+    .upload-title {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--white);
+      text-align: center;
+    }
+    .upload-sub {
+      font-size: 13px;
+      color: rgba(255,255,255,0.45);
+      text-align: center;
+      line-height: 1.5;
+    }
+    .upload-formats {
+      display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;
+    }
+    .upload-format-chip {
+      background: rgba(255,255,255,0.08);
+      color: rgba(255,255,255,0.5);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 50px;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .upload-btn {
+      background: var(--yellow);
+      color: var(--black);
+      border: none;
+      border-radius: var(--radius-btn);
+      padding: 14px 32px;
+      font-family: var(--font);
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s;
+      box-shadow: 0 4px 16px rgba(255,214,0,0.25);
+      position: relative;
+      z-index: 1;
+    }
+    .upload-btn svg { width: 16px; height: 16px; }
+
+    /* Video Preview (after upload selected) */
+    .video-preview {
+      display: none;
+      width: 100%;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .video-preview.visible { display: flex; }
+    .video-thumb {
+      width: 100%;
+      aspect-ratio: 16/9;
+      background: #1a1a1a;
+      border-radius: 16px;
+      overflow: hidden;
+      position: relative;
+      display: flex; align-items: center; justify-content: center;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .video-thumb-grid {
+      position: absolute;
+      inset: 0;
+      opacity: 0.04;
+      background-image:
+        repeating-linear-gradient(0deg, transparent, transparent 20px, rgba(255,255,255,0.8) 20px, rgba(255,255,255,0.8) 21px),
+        repeating-linear-gradient(90deg, transparent, transparent 20px, rgba(255,255,255,0.8) 20px, rgba(255,255,255,0.8) 21px);
+    }
+    .video-thumb-icon {
+      width: 52px; height: 52px;
+      background: rgba(255,214,0,0.9);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      position: relative; z-index: 1;
+    }
+    .video-thumb-icon svg { width: 22px; height: 22px; margin-left: 3px; }
+    .video-filename {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 12px 14px;
+    }
+    .video-file-icon {
+      width: 36px; height: 36px;
+      background: rgba(255,214,0,0.15);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .video-file-icon svg { width: 18px; height: 18px; }
+    .video-file-name { font-size: 13px; font-weight: 700; color: var(--white); }
+    .video-file-meta { font-size: 11px; color: rgba(255,255,255,0.45); margin-top: 2px; }
+    .video-file-check {
+      margin-left: auto;
+      width: 24px; height: 24px;
+      background: var(--green);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .video-file-check svg { width: 12px; height: 12px; }
+
+    .video-analyse-btn {
+      width: 100%;
+      background: var(--yellow);
+      color: var(--black);
+      border: none;
+      border-radius: var(--radius-btn);
+      padding: 17px;
+      font-family: var(--font);
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      box-shadow: 0 4px 20px rgba(255,214,0,0.3);
+      transition: all 0.2s;
+    }
+    .video-analyse-btn:active { transform: scale(0.98); }
+    .video-analyse-btn svg { width: 18px; height: 18px; }
+
+    .video-change-btn {
+      width: 100%;
+      background: transparent;
+      color: rgba(255,255,255,0.5);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: var(--radius-btn);
+      padding: 13px;
+      font-family: var(--font);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .video-change-btn:hover { border-color: rgba(255,255,255,0.25); color: rgba(255,255,255,0.7); }
+
+    /* ── SCREEN 2: SCANNER ── */
+    .scanner-view {
+      flex: 1;
+      background: #000;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 500px;
+    }
+    .camera-bg {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, #0a0a0a 0%, #1a1a1a 50%, #0a0a0a 100%);
+    }
+    /* Simulated construction site image */
+    .camera-scene {
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse at 60% 40%, rgba(255,214,0,0.04) 0%, transparent 60%),
+        linear-gradient(180deg, #111 0%, #1e1e1e 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .camera-scene-lines {
+      position: absolute;
+      inset: 0;
+      opacity: 0.06;
+      background-image:
+        repeating-linear-gradient(0deg, transparent, transparent 40px, rgba(255,255,255,0.5) 40px, rgba(255,255,255,0.5) 41px),
+        repeating-linear-gradient(90deg, transparent, transparent 40px, rgba(255,255,255,0.5) 40px, rgba(255,255,255,0.5) 41px);
+    }
+
+    /* Scan frame */
+    .scan-frame {
+      position: relative;
+      z-index: 2;
+      width: 240px; height: 240px;
+    }
+    .scan-frame::before, .scan-frame::after,
+    .scan-frame-inner::before, .scan-frame-inner::after {
+      content: '';
+      position: absolute;
+      width: 28px; height: 28px;
+      border-color: var(--yellow);
+      border-style: solid;
+    }
+    .scan-frame::before { top: 0; left: 0; border-width: 3px 0 0 3px; }
+    .scan-frame::after  { top: 0; right: 0; border-width: 3px 3px 0 0; }
+    .scan-frame-inner::before { bottom: 0; left: 0; border-width: 0 0 3px 3px; }
+    .scan-frame-inner::after  { bottom: 0; right: 0; border-width: 0 3px 3px 0; }
+
+    .scan-line {
+      position: absolute;
+      left: 4px; right: 4px;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--yellow), transparent);
+      animation: scanLine 2s ease-in-out infinite;
+      box-shadow: 0 0 8px var(--yellow);
+    }
+    @keyframes scanLine {
+      0%   { top: 8px; opacity: 0; }
+      10%  { opacity: 1; }
+      90%  { opacity: 1; }
+      100% { top: 228px; opacity: 0; }
+    }
+
+    /* Object being scanned */
+    .scan-object {
+      position: absolute;
+      inset: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .scan-object svg { width: 140px; height: 140px; opacity: 0.35; }
+
+    .scanner-hint {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      padding: 20px 24px 32px;
+      background: linear-gradient(0deg, rgba(0,0,0,0.9) 0%, transparent 100%);
+      z-index: 3;
+      text-align: center;
+    }
+    .scanner-hint p {
+      color: rgba(255,255,255,0.7);
+      font-size: 14px;
+      margin-bottom: 20px;
+    }
+    .scanner-hint strong { color: var(--yellow); }
+
+    .scan-trigger {
+      width: 72px; height: 72px;
+      border-radius: 50%;
+      background: var(--yellow);
+      border: 4px solid rgba(255,255,255,0.3);
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto;
+      transition: transform 0.1s, box-shadow 0.2s;
+      box-shadow: 0 0 0 0 rgba(255,214,0,0.4);
+      animation: scanPulse 2s infinite;
+    }
+    @keyframes scanPulse {
+      0%  { box-shadow: 0 0 0 0 rgba(255,214,0,0.4); }
+      70% { box-shadow: 0 0 0 16px rgba(255,214,0,0); }
+      100%{ box-shadow: 0 0 0 0 rgba(255,214,0,0); }
+    }
+    .scan-trigger:active { transform: scale(0.94); }
+    .scan-trigger svg { width: 28px; height: 28px; }
+
+    .scanner-top {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      padding: 16px 20px;
+      background: linear-gradient(180deg, rgba(0,0,0,0.8) 0%, transparent 100%);
+      z-index: 3;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .scanner-mode-badge {
+      background: rgba(255,214,0,0.15);
+      border: 1px solid rgba(255,214,0,0.4);
+      color: var(--yellow);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 5px 12px;
+      border-radius: 50px;
+      letter-spacing: 0.05em;
+    }
+    .scanner-sides {
+      color: rgba(255,255,255,0.7);
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .side-dots {
+      display: flex; gap: 5px; margin-top: 4px; justify-content: flex-end;
+    }
+    .side-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.3);
+    }
+    .side-dot.done { background: var(--yellow); }
+
+    /* ── SCREEN 3: PROCESSING ── */
+    .processing-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 24px;
+      gap: 32px;
+      background: var(--white);
+    }
+    .processing-ring {
+      width: 120px; height: 120px;
+      position: relative;
+    }
+    .processing-ring svg { width: 100%; height: 100%; animation: rotate 2s linear infinite; }
+    @keyframes rotate { to { transform: rotate(360deg); } }
+    .processing-ring-center {
+      position: absolute;
+      inset: 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .processing-ring-center svg { width: 40px; height: 40px; }
+
+    .processing-steps { width: 100%; display: flex; flex-direction: column; gap: 12px; }
+    .proc-step {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 16px;
+      background: var(--gray-light);
+      border-radius: 12px;
+      transition: all 0.3s;
+    }
+    .proc-step.active { background: rgba(255,214,0,0.12); border: 1px solid rgba(255,214,0,0.3); }
+    .proc-step.done { background: rgba(34,197,94,0.08); }
+    .proc-icon {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      background: var(--gray-medium);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .proc-step.active .proc-icon { background: var(--yellow); }
+    .proc-step.done .proc-icon { background: var(--green); }
+    .proc-icon svg { width: 16px; height: 16px; }
+    .proc-label { font-size: 14px; font-weight: 600; color: var(--black); }
+    .proc-sublabel { font-size: 12px; color: var(--gray-dark); margin-top: 2px; }
+    .proc-status { margin-left: auto; font-size: 12px; font-weight: 600; }
+    .proc-step.active .proc-status { color: var(--yellow); }
+    .proc-step.done .proc-status { color: var(--green); }
+
+    .processing-title { font-size: 22px; font-weight: 800; color: var(--black); text-align: center; }
+    .processing-sub { font-size: 14px; color: var(--gray-dark); text-align: center; }
+
+    /* ── SCREEN 4: RESULTS ── */
+    .result-header {
+      background: var(--black);
+      padding: 20px 24px 28px;
+      position: relative;
+      overflow: hidden;
+    }
+    .result-header::after {
+      content: '';
+      position: absolute;
+      bottom: -30px; right: -30px;
+      width: 120px; height: 120px;
+      background: var(--yellow);
+      border-radius: 50%;
+      opacity: 0.1;
+    }
+    .result-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(34,197,94,0.15);
+      border: 1px solid rgba(34,197,94,0.3);
+      color: #4ade80;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 5px 12px;
+      border-radius: 50px;
+      margin-bottom: 12px;
+      letter-spacing: 0.04em;
+    }
+    .result-badge svg { width: 12px; height: 12px; }
+    .result-title {
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--white);
+      margin-bottom: 6px;
+    }
+    .result-meta { font-size: 13px; color: rgba(255,255,255,0.5); }
+
+    /* Tabs */
+    .result-tabs {
+      display: flex;
+      gap: 0;
+      border-bottom: 2px solid var(--gray-medium);
+      background: var(--white);
+      overflow-x: auto;
+      flex-shrink: 0;
+    }
+    .result-tabs::-webkit-scrollbar { display: none; }
+    .tab {
+      padding: 14px 18px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--gray-dark);
+      cursor: pointer;
+      white-space: nowrap;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .tab.active { color: var(--black); border-bottom-color: var(--yellow); }
+    .tab svg { width: 14px; height: 14px; }
+
+    .tab-content { display: none; padding: 20px 24px 100px; flex-direction: column; gap: 16px; }
+    .tab-content.active { display: flex; }
+
+    /* Material Tab */
+    .material-summary {
+      background: var(--gray-light);
+      border-radius: var(--radius-card);
+      padding: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .mat-sum-label { font-size: 13px; color: var(--gray-dark); }
+    .mat-sum-value { font-size: 20px; font-weight: 800; color: var(--black); }
+    .mat-sum-tag {
+      background: var(--yellow);
+      color: var(--black);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 50px;
+    }
+    .material-list { display: flex; flex-direction: column; gap: 10px; }
+    .material-item {
+      background: var(--white);
+      border: 1px solid var(--gray-medium);
+      border-radius: var(--radius-card);
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      box-shadow: var(--shadow-card);
+    }
+    .mat-icon {
+      width: 40px; height: 40px;
+      background: var(--black);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .mat-icon svg { width: 20px; height: 20px; }
+    .mat-info { flex: 1; }
+    .mat-name { font-size: 14px; font-weight: 700; color: var(--black); }
+    .mat-spec { font-size: 12px; color: var(--gray-dark); margin-top: 2px; }
+    .mat-qty {
+      text-align: right;
+    }
+    .mat-qty-val { font-size: 16px; font-weight: 800; color: var(--black); }
+    .mat-qty-unit { font-size: 11px; color: var(--gray-dark); }
+    .mat-status {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      margin-top: 3px;
+      margin-left: auto;
+    }
+    .mat-status.warn { background: #F59E0B; }
+
+    /* Costs Tab */
+    .cost-total-card {
+      background: var(--black);
+      border-radius: var(--radius-card);
+      padding: 24px;
+      color: var(--white);
+    }
+    .cost-total-label { font-size: 13px; color: rgba(255,255,255,0.6); margin-bottom: 6px; }
+    .cost-total-val { font-size: 38px; font-weight: 800; color: var(--yellow); line-height: 1; }
+    .cost-total-sub { font-size: 12px; color: rgba(255,255,255,0.4); margin-top: 8px; }
+
+    .cost-breakdown { display: flex; flex-direction: column; gap: 10px; }
+    .cost-item {
+      background: var(--white);
+      border: 1px solid var(--gray-medium);
+      border-radius: var(--radius-card);
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      box-shadow: var(--shadow-card);
+    }
+    .cost-bar-wrap { flex: 1; }
+    .cost-bar-label { font-size: 13px; font-weight: 600; color: var(--black); margin-bottom: 6px; display: flex; justify-content: space-between; }
+    .cost-bar-track { height: 6px; background: var(--gray-medium); border-radius: 3px; overflow: hidden; }
+    .cost-bar-fill { height: 100%; background: var(--yellow); border-radius: 3px; transition: width 1s ease; }
+    .cost-icon {
+      width: 36px; height: 36px;
+      background: var(--gray-light);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .cost-icon svg { width: 18px; height: 18px; }
+
+    /* Maße Tab */
+    .measure-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .measure-card {
+      background: var(--white);
+      border: 1px solid var(--gray-medium);
+      border-radius: var(--radius-card);
+      padding: 16px;
+      box-shadow: var(--shadow-card);
+    }
+    .measure-card.full { grid-column: 1 / -1; }
+    .measure-label { font-size: 11px; font-weight: 600; color: var(--gray-dark); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+    .measure-value { font-size: 26px; font-weight: 800; color: var(--black); line-height: 1; }
+    .measure-unit { font-size: 14px; font-weight: 500; color: var(--gray-dark); }
+    .measure-icon-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .measure-icon { width: 28px; height: 28px; background: var(--yellow); border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+    .measure-icon svg { width: 14px; height: 14px; }
+
+    .accuracy-row {
+      background: rgba(34,197,94,0.08);
+      border: 1px solid rgba(34,197,94,0.2);
+      border-radius: 12px;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .accuracy-dot { width: 10px; height: 10px; background: var(--green); border-radius: 50%; flex-shrink: 0; }
+    .accuracy-text { font-size: 13px; font-weight: 600; color: var(--black); }
+    .accuracy-val { color: var(--green); }
+
+    /* Modell Tab */
+    .model-viewer {
+      background: var(--black);
+      border-radius: var(--radius-card);
+      aspect-ratio: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .model-viewer::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse at 50% 50%, rgba(255,214,0,0.06) 0%, transparent 70%);
+    }
+    .model-3d {
+      position: relative;
+      width: 180px;
+      height: 180px;
+      transform-style: preserve-3d;
+      animation: rotate3d 8s linear infinite;
+    }
+    @keyframes rotate3d {
+      from { transform: rotateY(0deg) rotateX(15deg); }
+      to   { transform: rotateY(360deg) rotateX(15deg); }
+    }
+    .model-3d svg { width: 180px; height: 180px; }
+
+    .model-grid-bg {
+      position: absolute;
+      inset: 0;
+      opacity: 0.06;
+      background-image:
+        repeating-linear-gradient(0deg, transparent, transparent 20px, rgba(255,214,0,0.8) 20px, rgba(255,214,0,0.8) 21px),
+        repeating-linear-gradient(90deg, transparent, transparent 20px, rgba(255,214,0,0.8) 20px, rgba(255,214,0,0.8) 21px);
+    }
+
+    .model-controls {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+    }
+    .model-ctrl-btn {
+      flex: 1;
+      padding: 12px;
+      background: var(--gray-light);
+      border: 1px solid var(--gray-medium);
+      border-radius: 12px;
+      font-family: var(--font);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--black);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+    .model-ctrl-btn.active, .model-ctrl-btn:hover { background: var(--yellow); border-color: var(--yellow); }
+    .model-ctrl-btn svg { width: 14px; height: 14px; }
+
+    .model-info {
+      background: var(--gray-light);
+      border-radius: var(--radius-card);
+      padding: 16px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .model-info-item { }
+    .model-info-label { font-size: 11px; color: var(--gray-dark); margin-bottom: 4px; }
+    .model-info-val { font-size: 15px; font-weight: 700; color: var(--black); }
+    .model-sides {
+      display: flex;
+      gap: 8px;
+    }
+    .model-side-chip {
+      padding: 4px 10px;
+      background: var(--green);
+      color: var(--white);
+      font-size: 10px;
+      font-weight: 700;
+      border-radius: 50px;
+    }
+    .model-side-chip.missing { background: var(--gray-medium); color: var(--gray-dark); }
+
+    /* ── BOTTOM ACTION BAR ── */
+    .action-bar {
+      position: fixed;
+      bottom: 0;
+      width: 390px;
+      background: var(--white);
+      border-top: 1px solid var(--gray-medium);
+      padding: 12px 24px 28px;
+      display: flex;
+      gap: 12px;
+      z-index: 100;
+    }
+    .action-bar-secondary {
+      flex: 1;
+      padding: 14px;
+      background: var(--gray-light);
+      border: 1px solid var(--gray-medium);
+      border-radius: var(--radius-btn);
+      font-family: var(--font);
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--black);
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      transition: all 0.2s;
+    }
+    .action-bar-secondary:hover { background: var(--gray-medium); }
+    .action-bar-secondary svg { width: 16px; height: 16px; }
+    .action-bar-primary {
+      flex: 2;
+      padding: 14px;
+      background: var(--yellow);
+      border: none;
+      border-radius: var(--radius-btn);
+      font-family: var(--font);
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--black);
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      box-shadow: 0 4px 16px rgba(255,214,0,0.3);
+      transition: all 0.2s;
+    }
+    .action-bar-primary:hover { background: var(--yellow-hover); }
+    .action-bar-primary svg { width: 16px; height: 16px; }
+
+    /* ── DESKTOP LAYOUT ── */
+    .desktop-wrapper {
+      display: none;
+    }
+
+    /* ── TOAST ── */
+    .toast {
+      position: fixed;
+      bottom: 100px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: var(--black);
+      color: var(--white);
+      padding: 12px 20px;
+      border-radius: 50px;
+      font-size: 13px;
+      font-weight: 600;
+      opacity: 0;
+      transition: all 0.3s;
+      white-space: nowrap;
+      z-index: 999;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* ── RESPONSIVE DESKTOP ── */
+    @media (min-width: 900px) {
+      body { padding: 40px; align-items: flex-start; justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════
+     MOBILE APP
+════════════════════════════════════════ -->
+<div>
+  <div class="device-label">Mobile App</div>
+  <div class="device" id="mobileDevice">
+
+    <!-- Status Bar -->
+    <div class="status-bar">
+      <span class="time">9:41</span>
+      <div class="status-icons">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></svg>
+        <svg viewBox="0 0 24 24" fill="currentColor"><rect x="1" y="6" width="18" height="12" rx="2" stroke="currentColor" stroke-width="2" fill="none"/><rect x="3" y="8" width="12" height="8" rx="1" fill="currentColor"/><path d="M23 11v2a2 2 0 000-2z" fill="currentColor"/></svg>
+      </div>
+    </div>
+
+    <!-- ── SCREEN 1: HOME ── -->
+    <div class="screen active" id="screenHome">
+      <div class="nav">
+        <div class="nav-logo">HERO<span>.</span></div>
+        <div class="nav-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </div>
+      </div>
+
+      <div class="home-hero">
+        <div class="home-badge">
+          <span class="home-badge-dot"></span>
+          AI-powered · Live
+        </div>
+        <h1>Scan &amp; <span>analyse</span><br/>components</h1>
+        <p>Automatically detect dimensions, materials and costs — directly on the construction site.</p>
+      </div>
+
+      <div style="margin: 28px 24px 0; display:flex; flex-direction:column; gap:10px;">
+        <button class="home-scan-btn" style="margin:0;" onclick="goTo('screenScanner')">
+          <div class="btn-icon">
+            <svg viewBox="0 0 24 24" fill="white"><path d="M9.5 6.5v3h-3v-3h3M11 5H5v6h6V5zm-1.5 9.5v3h-3v-3h3M11 13H5v6h6v-6zm6.5-6.5v3h-3v-3h3M19 5h-6v6h6V5zm-6 8h1.5v1.5H13V13zm1.5 1.5H16V16h-1.5v-1.5zM16 13h1.5v1.5H16V13zm-3 3h1.5v1.5H13V16zm1.5 1.5H16V19h-1.5v-1.5zM16 16h1.5v1.5H16V16zm1.5-1.5H19V16h-1.5v-1.5zm0 3H19V19h-1.5v-1.5z"/></svg>
+          </div>
+          Start Scan
+        </button>
+        <button class="home-scan-btn" style="margin:0; background:transparent; color:var(--black); box-shadow:none; border: 2px solid var(--gray-medium);" onclick="goToUpload()">
+          <div class="btn-icon" style="background:var(--black);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" width="14"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+          </div>
+          Upload Video
+        </button>
+        <button class="home-scan-btn" style="margin:0; background:transparent; color:var(--black); box-shadow:none; border: 2px solid var(--gray-medium);" onclick="openSendLinkModal()">
+          <div class="btn-icon" style="background:var(--black);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" width="14"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          </div>
+          Send Upload Link
+        </button>
+      </div>
+
+      <div class="home-stats">
+        <div class="stat-card">
+          <div class="stat-number">142</div>
+          <div class="stat-label">Total Scans</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">98%</div>
+          <div class="stat-label">Accuracy</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">2.4s</div>
+          <div class="stat-label">Avg. Scan Time</div>
+        </div>
+      </div>
+
+      <div class="section-title">
+        <div class="section-accent"></div>
+        Recent Scans
+      </div>
+
+      <div class="recent-scans">
+        <div class="scan-item" onclick="goTo('screenResult')">
+          <div class="scan-thumb">
+            <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+          </div>
+          <div class="scan-info">
+            <div class="scan-name">Steel Beam HEA 200</div>
+            <div class="scan-meta">Today, 08:34 · 3 Materials · €2,340</div>
+          </div>
+          <svg class="scan-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+        <div class="scan-item" onclick="goTo('screenResult')">
+          <div class="scan-thumb">
+            <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+          </div>
+          <div class="scan-info">
+            <div class="scan-name">Window Frame 120×140</div>
+            <div class="scan-meta">Yesterday, 14:12 · 2 Materials · €890</div>
+          </div>
+          <svg class="scan-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+        <div class="scan-item" onclick="goTo('screenResult')">
+          <div class="scan-thumb">
+            <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          </div>
+          <div class="scan-info">
+            <div class="scan-name">Wall Section B2</div>
+            <div class="scan-meta">Apr 12 · 5 Materials · €4,120</div>
+          </div>
+          <svg class="scan-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SCREEN 2: SCANNER ── -->
+    <div class="screen" id="screenScanner" style="background:#000; position:relative;">
+
+      <!-- Top Nav -->
+      <div class="nav" style="background:#000; border-color:#333; position:absolute; top:0; width:100%; z-index:20; box-shadow:none;">
+        <button class="nav-back" onclick="goTo('screenHome')" style="color:white">
+          <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" width="18"><polyline points="15 18 9 12 15 6"/></svg>
+          Zurück
+        </button>
+        <div class="nav-icon" style="background:rgba(255,255,255,0.1)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" width="18"><circle cx="12" cy="12" r="3"/><path d="M20.188 10.934a8.017 8.017 0 000 2.132C20.69 14.71 22 16 22 16s-2 2-10 2S2 16 2 16s1.31-1.29 1.812-2.934a8.017 8.017 0 000-2.132C3.31 9.29 2 8 2 8s2-2 10-2 10 2 10 2-1.31 1.29-1.812 2.934z"/></svg>
+        </div>
+      </div>
+
+      <!-- Mode Toggle -->
+      <div class="scan-mode-bar">
+        <button class="scan-mode-btn active" id="modeLive" onclick="setMode('live')">
+          <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="3"/><path d="M12 1a11 11 0 100 22A11 11 0 0012 1zm0 20a9 9 0 110-18 9 9 0 010 18z" opacity=".3"/></svg>
+          Live-Scan
+        </button>
+        <button class="scan-mode-btn" id="modeVideo" onclick="setMode('video')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+          Video hochladen
+        </button>
+      </div>
+
+      <!-- ── LIVE SCAN VIEW ── -->
+      <div class="scanner-view" id="liveScanView">
+        <div class="camera-bg"></div>
+        <div class="camera-scene">
+          <div class="camera-scene-lines"></div>
+        </div>
+
+        <div class="scanner-top" style="top:56px;">
+          <div class="scanner-mode-badge">&#9654; LIVE SCAN</div>
+          <div style="text-align:right">
+            <div class="scanner-sides">Seiten</div>
+            <div class="side-dots">
+              <div class="side-dot done" title="Vorne"></div>
+              <div class="side-dot done" title="Links"></div>
+              <div class="side-dot" title="Rechts"></div>
+              <div class="side-dot" title="Oben"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="scan-frame">
+          <div class="scan-frame-inner">
+            <div class="scan-object">
+              <svg viewBox="0 0 100 100" fill="none" stroke="rgba(255,214,0,0.6)" stroke-width="2">
+                <rect x="20" y="10" width="60" height="10" rx="2"/>
+                <rect x="45" y="20" width="10" height="60" rx="1"/>
+                <rect x="20" y="80" width="60" height="10" rx="2"/>
+              </svg>
+            </div>
+          </div>
+          <div class="scan-line"></div>
+        </div>
+
+        <div class="scanner-hint">
+          <p>Objekt in den Rahmen halten<br/><strong>2 von 4 Seiten</strong> erfasst</p>
+          <button class="scan-trigger" onclick="startProcessing()">
+            <svg viewBox="0 0 24 24" fill="#1A1A1A"><path d="M9.5 6.5v3h-3v-3h3M11 5H5v6h6V5zm-1.5 9.5v3h-3v-3h3M11 13H5v6h6v-6zm6.5-6.5v3h-3v-3h3M19 5h-6v6h6V5z"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- ── VIDEO UPLOAD VIEW ── -->
+      <div class="upload-view" id="uploadView" style="padding-top: 100px;">
+
+        <!-- Upload Zone (initial state) -->
+        <div id="uploadZoneWrap" style="width:100%;">
+          <div class="upload-zone" onclick="simulateUpload()">
+            <div class="upload-icon-wrap">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#FFD600" stroke-width="2" stroke-linecap="round">
+                <polyline points="16 16 12 12 8 16"/>
+                <line x1="12" y1="12" x2="12" y2="21"/>
+                <path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3"/>
+              </svg>
+            </div>
+            <div class="upload-title">Video hier ablegen</div>
+            <div class="upload-sub">oder tippe um ein Video<br/>aus der Galerie auszuwählen</div>
+            <div class="upload-formats">
+              <span class="upload-format-chip">MP4</span>
+              <span class="upload-format-chip">MOV</span>
+              <span class="upload-format-chip">AVI</span>
+              <span class="upload-format-chip">max. 2 GB</span>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;margin:20px 0;">
+            <div style="flex:1;height:1px;background:rgba(255,255,255,0.08);"></div>
+            <span style="font-size:12px;color:rgba(255,255,255,0.3);font-weight:600;">oder</span>
+            <div style="flex:1;height:1px;background:rgba(255,255,255,0.08);"></div>
+          </div>
+          <button class="upload-btn" style="width:100%;justify-content:center;" onclick="simulateUpload()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" stroke-width="2" stroke-linecap="round">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <circle cx="8.5" cy="8.5" r="1.5"/>
+              <polyline points="21 15 16 10 5 21"/>
+            </svg>
+            Aus Galerie wählen
+          </button>
+        </div>
+
+        <!-- Video Preview (after selection) -->
+        <div class="video-preview" id="videoPreview">
+          <div class="video-thumb">
+            <div class="video-thumb-grid"></div>
+            <div style="position:relative;z-index:1;text-align:center;">
+              <div class="video-thumb-icon">
+                <svg viewBox="0 0 24 24" fill="#1A1A1A"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              </div>
+              <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:10px;font-weight:600;">Vorschau</div>
+            </div>
+            <!-- Duration badge -->
+            <div style="position:absolute;bottom:10px;right:10px;background:rgba(0,0,0,0.7);color:white;font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;">0:34</div>
+          </div>
+
+          <div class="video-filename">
+            <div class="video-file-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#FFD600" stroke-width="2" stroke-linecap="round">
+                <polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/>
+              </svg>
+            </div>
+            <div>
+              <div class="video-file-name">baustelle_traeger_scan.mp4</div>
+              <div class="video-file-meta">87.4 MB · 0:34 min · 1080p</div>
+            </div>
+            <div class="video-file-check">
+              <svg viewBox="0 0 24 24" fill="white"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
+            </div>
+          </div>
+
+          <button class="video-analyse-btn" onclick="startProcessing()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" stroke-width="2.5" stroke-linecap="round">
+              <path d="M9.5 6.5v3h-3v-3h3M11 5H5v6h6V5zm-1.5 9.5v3h-3v-3h3M11 13H5v6h6v-6zm6.5-6.5v3h-3v-3h3M19 5h-6v6h6V5z"/>
+            </svg>
+            Video analysieren
+          </button>
+          <button class="video-change-btn" onclick="resetUpload()">
+            Anderes Video wählen
+          </button>
+        </div>
+
+      </div><!-- /upload-view -->
+
+    </div><!-- /screenScanner -->
+
+    <!-- ── SCREEN 3: PROCESSING ── -->
+    <div class="screen" id="screenProcessing">
+      <div class="nav">
+        <div class="nav-logo">HERO<span>.</span></div>
+      </div>
+      <div class="processing-body">
+        <div class="processing-ring">
+          <svg viewBox="0 0 120 120">
+            <circle cx="60" cy="60" r="54" fill="none" stroke="#E8E8E8" stroke-width="8"/>
+            <circle cx="60" cy="60" r="54" fill="none" stroke="#FFD600" stroke-width="8"
+              stroke-dasharray="200 140" stroke-linecap="round"/>
+          </svg>
+          <div class="processing-ring-center">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" stroke-width="2" stroke-linecap="round">
+              <path d="M9.5 6.5v3h-3v-3h3M11 5H5v6h6V5zm-1.5 9.5v3h-3v-3h3M11 13H5v6h6v-6zm6.5-6.5v3h-3v-3h3M19 5h-6v6h6V5z"/>
+            </svg>
+          </div>
+        </div>
+
+        <div>
+          <div class="processing-title">Scan wird analysiert</div>
+          <div class="processing-sub" style="margin-top:6px">KI verarbeitet die Scandaten…</div>
+        </div>
+
+        <div class="processing-steps">
+          <div class="proc-step done" id="step1">
+            <div class="proc-icon">
+              <svg viewBox="0 0 24 24" fill="white" width="16"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
+            </div>
+            <div>
+              <div class="proc-label">Bilderfassung</div>
+              <div class="proc-sublabel">4 Seiten aufgenommen</div>
+            </div>
+            <div class="proc-status">✓ Fertig</div>
+          </div>
+          <div class="proc-step active" id="step2">
+            <div class="proc-icon">
+              <svg viewBox="0 0 24 24" fill="#1A1A1A" width="16"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67V7z"/></svg>
+            </div>
+            <div>
+              <div class="proc-label">3D-Rekonstruktion</div>
+              <div class="proc-sublabel">Modell wird berechnet…</div>
+            </div>
+            <div class="proc-status" style="color:var(--yellow)">Läuft…</div>
+          </div>
+          <div class="proc-step" id="step3">
+            <div class="proc-icon">
+              <svg viewBox="0 0 24 24" fill="#999" width="16"><path d="M9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm2-7h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11z"/></svg>
+            </div>
+            <div>
+              <div class="proc-label">Materialerkennung</div>
+              <div class="proc-sublabel">Warte auf 3D-Modell…</div>
+            </div>
+            <div class="proc-status" style="color:#ccc">Ausstehend</div>
+          </div>
+          <div class="proc-step" id="step4">
+            <div class="proc-icon">
+              <svg viewBox="0 0 24 24" fill="#999" width="16"><path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/></svg>
+            </div>
+            <div>
+              <div class="proc-label">Kostenkalkulation</div>
+              <div class="proc-sublabel">Aktuelle Marktpreise…</div>
+            </div>
+            <div class="proc-status" style="color:#ccc">Ausstehend</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SCREEN 4: RESULT ── -->
+    <div class="screen" id="screenResult">
+      <div class="nav">
+        <button class="nav-back" onclick="goTo('screenHome')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18"><polyline points="15 18 9 12 15 6"/></svg>
+          Zurück
+        </button>
+        <div style="display:flex;gap:8px">
+          <div class="nav-icon" onclick="showToast('Gespeichert!')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="18"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          </div>
+          <div class="nav-icon" onclick="showToast('Link kopiert!')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="18"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="result-header">
+        <div class="result-badge">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
+          SCAN ABGESCHLOSSEN
+        </div>
+        <div class="result-title">Stahlträger HEA 200</div>
+        <div class="result-meta">Gescannt 09.04.2026 · 09:41 · 4 Seiten · 2.3s</div>
+      </div>
+
+      <div class="result-tabs" id="resultTabs">
+        <div class="tab active" onclick="switchTab('material')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg>
+          Materialien
+        </div>
+        <div class="tab" onclick="switchTab('kosten')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+          Kosten
+        </div>
+        <div class="tab" onclick="switchTab('masse')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
+          Maße
+        </div>
+        <div class="tab" onclick="switchTab('modell')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+          3D-Modell
+        </div>
+      </div>
+
+      <!-- Tab: Materialien -->
+      <div class="tab-content active" id="tab-material">
+        <div class="material-summary">
+          <div>
+            <div class="mat-sum-label">Gesamtmaterial</div>
+            <div class="mat-sum-value">4 Positionen</div>
+          </div>
+          <div class="mat-sum-tag">Lager: verfügbar</div>
+        </div>
+        <div class="material-list">
+          <div class="material-item">
+            <div class="mat-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+            </div>
+            <div class="mat-info">
+              <div class="mat-name">Stahlprofil HEA 200</div>
+              <div class="mat-spec">S235JR · Warmgewalzt · verzinkt</div>
+            </div>
+            <div class="mat-qty">
+              <div class="mat-qty-val">6.4</div>
+              <div class="mat-qty-unit">Meter</div>
+            </div>
+          </div>
+          <div class="material-item">
+            <div class="mat-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
+            </div>
+            <div class="mat-info">
+              <div class="mat-name">Schrauben M16</div>
+              <div class="mat-spec">Festigkeitsklasse 8.8 · galvanisch</div>
+            </div>
+            <div class="mat-qty">
+              <div class="mat-qty-val">24</div>
+              <div class="mat-qty-unit">Stück</div>
+            </div>
+          </div>
+          <div class="material-item">
+            <div class="mat-icon" style="background:var(--yellow)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            </div>
+            <div class="mat-info">
+              <div class="mat-name">Korrosionsschutz</div>
+              <div class="mat-spec">Zinkstaub-Primer · 2-komponentig</div>
+            </div>
+            <div class="mat-qty">
+              <div class="mat-qty-val">2.1</div>
+              <div class="mat-qty-unit">Liter</div>
+            </div>
+          </div>
+          <div class="material-item">
+            <div class="mat-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            </div>
+            <div class="mat-info">
+              <div class="mat-name">Schweißelektroden</div>
+              <div class="mat-spec">E6013 · ø3.2mm · basisch</div>
+            </div>
+            <div class="mat-qty">
+              <div class="mat-qty-val">1</div>
+              <div class="mat-qty-unit">Pack</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab: Kosten -->
+      <div class="tab-content" id="tab-kosten">
+        <div class="cost-total-card">
+          <div class="cost-total-label">Gesamtkosten (geschätzt)</div>
+          <div class="cost-total-val">2.340 €</div>
+          <div class="cost-total-sub">Marktpreise Stand April 2026 · inkl. MwSt.</div>
+        </div>
+        <div class="cost-breakdown">
+          <div class="cost-item">
+            <div class="cost-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+            </div>
+            <div class="cost-bar-wrap">
+              <div class="cost-bar-label">
+                <span>Stahlprofil HEA 200</span>
+                <span style="font-weight:800">1.640 €</span>
+              </div>
+              <div class="cost-bar-track"><div class="cost-bar-fill" style="width:70%"></div></div>
+            </div>
+          </div>
+          <div class="cost-item">
+            <div class="cost-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
+            </div>
+            <div class="cost-bar-wrap">
+              <div class="cost-bar-label">
+                <span>Verbindungsmittel</span>
+                <span style="font-weight:800">280 €</span>
+              </div>
+              <div class="cost-bar-track"><div class="cost-bar-fill" style="width:12%"></div></div>
+            </div>
+          </div>
+          <div class="cost-item">
+            <div class="cost-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            </div>
+            <div class="cost-bar-wrap">
+              <div class="cost-bar-label">
+                <span>Korrosionsschutz</span>
+                <span style="font-weight:800">230 €</span>
+              </div>
+              <div class="cost-bar-track"><div class="cost-bar-fill" style="width:10%"></div></div>
+            </div>
+          </div>
+          <div class="cost-item">
+            <div class="cost-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            </div>
+            <div class="cost-bar-wrap">
+              <div class="cost-bar-label">
+                <span>Montage (geschätzt)</span>
+                <span style="font-weight:800">190 €</span>
+              </div>
+              <div class="cost-bar-track"><div class="cost-bar-fill" style="width:8%"></div></div>
+            </div>
+          </div>
+        </div>
+        <div style="background:var(--gray-light); border-radius:12px; padding:14px 16px; font-size:13px; color:var(--gray-dark); line-height:1.5;">
+          ⚡ Preise basieren auf aktuellen Marktdaten. Endpreis kann je nach Lieferant und Menge abweichen.
+        </div>
+      </div>
+
+      <!-- Tab: Maße -->
+      <div class="tab-content" id="tab-masse">
+        <div class="accuracy-row">
+          <div class="accuracy-dot"></div>
+          <div class="accuracy-text">Messgenauigkeit: <span class="accuracy-val">±1.2 mm</span> (4 Seiten)</div>
+        </div>
+        <div class="measure-grid">
+          <div class="measure-card">
+            <div class="measure-icon-row">
+              <div class="measure-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" stroke-width="2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+              </div>
+              <div class="measure-label">Länge</div>
+            </div>
+            <div class="measure-value">6.400<span class="measure-unit"> mm</span></div>
+          </div>
+          <div class="measure-card">
+            <div class="measure-icon-row">
+              <div class="measure-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+              </div>
+              <div class="measure-label">Höhe (h)</div>
+            </div>
+            <div class="measure-value">200<span class="measure-unit"> mm</span></div>
+          </div>
+          <div class="measure-card">
+            <div class="measure-icon-row">
+              <div class="measure-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" stroke-width="2" stroke-linecap="round"><rect x="3" y="8" width="18" height="8" rx="1"/></svg>
+              </div>
+              <div class="measure-label">Flanschbreite</div>
+            </div>
+            <div class="measure-value">200<span class="measure-unit"> mm</span></div>
+          </div>
+          <div class="measure-card">
+            <div class="measure-icon-row">
+              <div class="measure-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" stroke-width="2" stroke-linecap="round"><line x1="12" y1="2" x2="12" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/></svg>
+              </div>
+              <div class="measure-label">Stegdicke</div>
+            </div>
+            <div class="measure-value">9.0<span class="measure-unit"> mm</span></div>
+          </div>
+          <div class="measure-card full">
+            <div class="measure-icon-row">
+              <div class="measure-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" stroke-width="2" stroke-linecap="round"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
+              </div>
+              <div class="measure-label">Volumen (berechnet)</div>
+            </div>
+            <div class="measure-value">0.0342<span class="measure-unit"> m³</span></div>
+          </div>
+          <div class="measure-card full">
+            <div class="measure-icon-row">
+              <div class="measure-icon" style="background:var(--black)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+              </div>
+              <div class="measure-label">Gewicht (geschätzt)</div>
+            </div>
+            <div class="measure-value">268.3<span class="measure-unit"> kg</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab: Modell -->
+      <div class="tab-content" id="tab-modell">
+        <div class="model-viewer">
+          <div class="model-grid-bg"></div>
+          <div class="model-3d">
+            <!-- Isometric I-Beam SVG -->
+            <svg viewBox="0 0 180 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <!-- Top flange -->
+              <polygon points="90,20 150,50 90,65 30,35" fill="#FFD600" stroke="#E6C200" stroke-width="1"/>
+              <!-- Left web face -->
+              <polygon points="30,35 90,65 90,120 30,90" fill="#C8A800" stroke="#E6C200" stroke-width="1"/>
+              <!-- Right web face -->
+              <polygon points="90,65 150,50 150,105 90,120" fill="#E6C200" stroke="#E6C200" stroke-width="1"/>
+              <!-- Bottom flange top -->
+              <polygon points="30,90 90,120 150,105 90,90" fill="#FFD600" stroke="#E6C200" stroke-width="1"/>
+              <!-- Bottom flange front -->
+              <polygon points="30,90 90,90 90,110 30,110" fill="#C8A800" stroke="#E6C200" stroke-width="1"/>
+              <!-- Bottom flange right -->
+              <polygon points="90,90 150,105 150,125 90,110" fill="#B8A000" stroke="#E6C200" stroke-width="1"/>
+              <!-- Bottom base -->
+              <polygon points="30,110 90,110 150,125 90,140 30,110" fill="#A89200" stroke="#E6C200" stroke-width="1"/>
+            </svg>
+          </div>
+        </div>
+
+        <div class="model-controls">
+          <button class="model-ctrl-btn active" onclick="this.parentElement.querySelectorAll('.model-ctrl-btn').forEach(b=>b.classList.remove('active')); this.classList.add('active')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="14"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+            3D-Ansicht
+          </button>
+          <button class="model-ctrl-btn" onclick="this.parentElement.querySelectorAll('.model-ctrl-btn').forEach(b=>b.classList.remove('active')); this.classList.add('active')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="14"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+            Draufsicht
+          </button>
+          <button class="model-ctrl-btn" onclick="this.parentElement.querySelectorAll('.model-ctrl-btn').forEach(b=>b.classList.remove('active')); this.classList.add('active')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="14"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg>
+            Querschnitt
+          </button>
+        </div>
+
+        <div class="model-info">
+          <div class="model-info-item">
+            <div class="model-info-label">Profiltyp</div>
+            <div class="model-info-val">HEA 200</div>
+          </div>
+          <div class="model-info-item">
+            <div class="model-info-label">Material</div>
+            <div class="model-info-val">S235JR</div>
+          </div>
+          <div class="model-info-item">
+            <div class="model-info-label">Scans</div>
+            <div class="model-info-val">4 / 4 Seiten</div>
+          </div>
+          <div class="model-info-item">
+            <div class="model-info-label">Seiten</div>
+            <div class="model-sides">
+              <span class="model-side-chip">V</span>
+              <span class="model-side-chip">L</span>
+              <span class="model-side-chip">R</span>
+              <span class="model-side-chip">O</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="action-bar">
+        <button class="action-bar-secondary" onclick="showToast('PDF wird erstellt…')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="16"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          PDF
+        </button>
+        <button class="action-bar-primary" onclick="showToast('Auftrag wurde übermittelt!')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" stroke-width="2" stroke-linecap="round" width="16"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          Auftrag erstellen
+        </button>
+      </div>
+    </div>
+
+  </div><!-- /device -->
+</div>
+
+<!-- ── TOAST ── -->
+<!-- ── SEND LINK MODAL ── -->
+<div id="sendLinkModal" style="
+  display:none; position:fixed; inset:0; z-index:500;
+  background:rgba(0,0,0,0.5); backdrop-filter:blur(4px);
+  align-items:flex-end; justify-content:center;">
+  <div style="
+    width:390px; background:#fff; border-radius:28px 28px 0 0;
+    padding:0 24px 48px; box-shadow:0 -8px 40px rgba(0,0,0,0.15);
+    transition: transform 0.3s ease;" id="sendLinkSheet">
+
+    <!-- Handle -->
+    <div style="width:40px;height:4px;background:#E8E8E8;border-radius:2px;margin:14px auto 24px;"></div>
+
+    <!-- Header -->
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:8px;">
+      <div style="width:48px;height:48px;background:#1A1A1A;border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" width="22">
+          <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+          <polyline points="22,6 12,13 2,6"/>
+        </svg>
+      </div>
+      <div>
+        <div style="font-size:18px;font-weight:800;color:#1A1A1A;">Send Upload Link</div>
+        <div style="font-size:13px;color:#4A4A4A;margin-top:2px;">Customer receives a personal upload link</div>
+      </div>
+    </div>
+
+    <!-- Info banner -->
+    <div style="background:#F5F5F5;border-radius:12px;padding:12px 14px;margin:18px 0;display:flex;gap:10px;align-items:flex-start;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#4A4A4A" stroke-width="2" stroke-linecap="round" width="16" style="flex-shrink:0;margin-top:1px;">
+        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+      <span style="font-size:12px;color:#4A4A4A;line-height:1.55;">The customer receives an email with a secure link to upload their video. The scan result will be shared directly in the HERO app.</span>
+    </div>
+
+    <!-- Form -->
+    <div style="display:flex;flex-direction:column;gap:14px;margin-bottom:22px;">
+      <div>
+        <label style="font-size:12px;font-weight:700;color:#1A1A1A;display:block;margin-bottom:7px;letter-spacing:0.02em;">CUSTOMER NAME</label>
+        <div style="position:relative;">
+          <div style="position:absolute;left:14px;top:50%;transform:translateY(-50%);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#999" stroke-width="2" stroke-linecap="round" width="16">
+              <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
+            </svg>
+          </div>
+          <input id="linkName" type="text" placeholder="e.g. John Smith"
+            style="width:100%;border:2px solid #E8E8E8;border-radius:12px;padding:14px 14px 14px 42px;
+              font-family:'DM Sans',sans-serif;font-size:15px;color:#1A1A1A;outline:none;transition:border 0.2s;"
+            onfocus="this.style.borderColor='#FFD600'" onblur="this.style.borderColor='#E8E8E8'"/>
+        </div>
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:700;color:#1A1A1A;display:block;margin-bottom:7px;letter-spacing:0.02em;">EMAIL ADDRESS</label>
+        <div style="position:relative;">
+          <div style="position:absolute;left:14px;top:50%;transform:translateY(-50%);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#999" stroke-width="2" stroke-linecap="round" width="16">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+              <polyline points="22,6 12,13 2,6"/>
+            </svg>
+          </div>
+          <input id="linkEmail" type="email" placeholder="customer@example.com"
+            style="width:100%;border:2px solid #E8E8E8;border-radius:12px;padding:14px 14px 14px 42px;
+              font-family:'DM Sans',sans-serif;font-size:15px;color:#1A1A1A;outline:none;transition:border 0.2s;"
+            onfocus="this.style.borderColor='#FFD600'" onblur="this.style.borderColor='#E8E8E8'"/>
+        </div>
+      </div>
+    </div>
+
+    <!-- Buttons -->
+    <div id="sendLinkForm" style="display:flex;flex-direction:column;gap:10px;">
+      <button onclick="sendLink()"
+        style="width:100%;background:#FFD600;color:#1A1A1A;border:none;border-radius:50px;
+          padding:18px;font-family:'DM Sans',sans-serif;font-size:16px;font-weight:700;
+          cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;
+          box-shadow:0 4px 20px rgba(255,214,0,0.35);transition:all 0.2s;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" stroke-width="2.5" stroke-linecap="round" width="18">
+          <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+        </svg>
+        Send Link
+      </button>
+      <button onclick="closeSendLinkModal()"
+        style="width:100%;background:transparent;color:#4A4A4A;border:none;
+          padding:14px;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;cursor:pointer;">
+        Cancel
+      </button>
+    </div>
+
+    <!-- Success State (hidden) -->
+    <div id="sendLinkSuccess" style="display:none;text-align:center;padding:10px 0;">
+      <div style="width:64px;height:64px;background:#22C55E;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
+        <svg viewBox="0 0 24 24" fill="white" width="30"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
+      </div>
+      <div style="font-size:20px;font-weight:800;color:#1A1A1A;margin-bottom:8px;">Link Sent!</div>
+      <div id="sendLinkSuccessMsg" style="font-size:14px;color:#4A4A4A;line-height:1.6;margin-bottom:24px;"></div>
+      <button onclick="closeSendLinkModal()"
+        style="width:100%;background:#FFD600;color:#1A1A1A;border:none;border-radius:50px;
+          padding:16px;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:700;cursor:pointer;">
+        Done
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  // Auto-navigate if opened via upload link
+  (function() {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('upload') === '1') {
+      const name = params.get('name');
+      // Wait for DOM, then jump straight to scanner in video mode
+      window.addEventListener('DOMContentLoaded', () => {
+        goTo('screenScanner');
+        setMode('video');
+        // Show personalised greeting if name provided
+        if (name) {
+          const greeting = document.createElement('div');
+          greeting.style.cssText = 'position:absolute;top:58px;left:0;right:0;z-index:15;padding:0 16px;';
+          greeting.innerHTML = `<div style="background:rgba(255,214,0,0.12);border:1px solid rgba(255,214,0,0.25);border-radius:50px;padding:8px 16px;display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:#FFD600;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#FFD600" stroke-width="2" stroke-linecap="round" width="14"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            Hi ${decodeURIComponent(name)} — upload your video here
+          </div>`;
+          document.getElementById('screenScanner').appendChild(greeting);
+        }
+      });
+    }
+  })();
+
+  function goTo(screenId) {
+    document.querySelectorAll('#mobileDevice .screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(screenId).classList.add('active');
+  }
+
+  function openSendLinkModal() {
+    const modal = document.getElementById('sendLinkModal');
+    modal.style.display = 'flex';
+    // reset state
+    document.getElementById('sendLinkForm').style.display = 'flex';
+    document.getElementById('sendLinkSuccess').style.display = 'none';
+    document.getElementById('linkName').value = '';
+    document.getElementById('linkEmail').value = '';
+  }
+
+  function closeSendLinkModal() {
+    document.getElementById('sendLinkModal').style.display = 'none';
+  }
+
+  // ── EmailJS config — fill in after free signup at emailjs.com ──────
+  const EMAILJS_PUBLIC_KEY  = 'YOUR_PUBLIC_KEY';   // Account → API Keys
+  const EMAILJS_SERVICE_ID  = 'YOUR_SERVICE_ID';   // Email Services tab
+  const EMAILJS_TEMPLATE_ID = 'YOUR_TEMPLATE_ID';  // Email Templates tab
+  // ──────────────────────────────────────────────────────────────────
+
+  function sendLink() {
+    const name  = document.getElementById('linkName').value.trim();
+    const email = document.getElementById('linkEmail').value.trim();
+
+    if (!name) {
+      document.getElementById('linkName').style.borderColor = '#EF4444';
+      document.getElementById('linkName').focus();
+      return;
+    }
+    if (!email || !email.includes('@')) {
+      document.getElementById('linkEmail').style.borderColor = '#EF4444';
+      document.getElementById('linkEmail').focus();
+      return;
+    }
+
+    // Build personalised upload link — lands directly on scanner upload screen
+    const base = window.location.href.replace(/[?#].*$/, '').replace(/index\.html$/, '');
+    const uploadUrl = base + 'index.html?upload=1&name=' + encodeURIComponent(name);
+
+    // Show loading state on button
+    const btn = document.querySelector('#sendLinkForm button');
+    btn.textContent = 'Sending…';
+    btn.disabled = true;
+    btn.style.opacity = '0.7';
+
+    const templateParams = {
+      to_name:     name,
+      to_email:    email,
+      upload_link: uploadUrl,
+    };
+
+    // If EmailJS is not configured yet, fall back to mailto for demo
+    if (EMAILJS_PUBLIC_KEY === 'YOUR_PUBLIC_KEY') {
+      _fallbackMailto(name, email, uploadUrl);
+      return;
+    }
+
+    emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY });
+    emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams)
+      .then(() => _showSuccess(email))
+      .catch(err => {
+        console.error('EmailJS error:', err);
+        _fallbackMailto(name, email, uploadUrl);
+      });
+  }
+
+  function _showSuccess(email) {
+    document.getElementById('sendLinkForm').style.display = 'none';
+    document.getElementById('sendLinkSuccessMsg').innerHTML =
+      'Upload link sent to<br/><strong>' + email + '</strong><br/>The customer can now upload their video directly.';
+    document.getElementById('sendLinkSuccess').style.display = 'block';
+  }
+
+  function _fallbackMailto(name, email, uploadUrl) {
+    // Fallback: open mail client (works without EmailJS setup)
+    const subject = encodeURIComponent('Your HERO Scanner Upload Link');
+    const body = encodeURIComponent(
+      'Hi ' + name + ',\n\n' +
+      'You have been invited to upload a video for analysis with the HERO Scanner.\n\n' +
+      'Click the link below, upload your video and receive a full material, cost and dimension breakdown within seconds:\n\n' +
+      uploadUrl + '\n\n' +
+      'The link is valid for 7 days.\n\n' +
+      'Best regards,\nYour HERO Team\n\nhero-software.de'
+    );
+    window.location.href = 'mailto:' + email + '?subject=' + subject + '&body=' + body;
+    _showSuccess(email);
+  }
+
+  // Close modal on backdrop click
+  document.getElementById('sendLinkModal').addEventListener('click', function(e) {
+    if (e.target === this) closeSendLinkModal();
+  });
+
+  function goToUpload() {
+    goTo('screenScanner');
+    setMode('video');
+  }
+
+  function setMode(mode) {
+    const liveView  = document.getElementById('liveScanView');
+    const uploadView = document.getElementById('uploadView');
+    const btnLive   = document.getElementById('modeLive');
+    const btnVideo  = document.getElementById('modeVideo');
+
+    if (mode === 'live') {
+      liveView.style.display = 'flex';
+      uploadView.classList.remove('visible');
+      btnLive.classList.add('active');
+      btnVideo.classList.remove('active');
+    } else {
+      liveView.style.display = 'none';
+      uploadView.classList.add('visible');
+      btnVideo.classList.add('active');
+      btnLive.classList.remove('active');
+    }
+  }
+
+  function simulateUpload() {
+    // Simulate file picked — show preview
+    document.getElementById('uploadZoneWrap').style.display = 'none';
+    document.getElementById('videoPreview').classList.add('visible');
+  }
+
+  function resetUpload() {
+    document.getElementById('uploadZoneWrap').style.display = 'block';
+    document.getElementById('videoPreview').classList.remove('visible');
+  }
+
+  function startProcessing() {
+    goTo('screenProcessing');
+    // Simulate steps completing
+    setTimeout(() => {
+      document.getElementById('step2').classList.remove('active');
+      document.getElementById('step2').classList.add('done');
+      document.getElementById('step2').querySelector('.proc-icon').innerHTML = '<svg viewBox="0 0 24 24" fill="white" width="16"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>';
+      document.getElementById('step2').querySelector('.proc-status').textContent = '✓ Fertig';
+      document.getElementById('step3').classList.add('active');
+      document.getElementById('step3').querySelector('.proc-status').textContent = 'Läuft…';
+      document.getElementById('step3').querySelector('.proc-status').style.color = 'var(--yellow)';
+      document.getElementById('step3').querySelector('.proc-icon').style.background = 'var(--yellow)';
+    }, 1800);
+
+    setTimeout(() => {
+      document.getElementById('step3').classList.remove('active');
+      document.getElementById('step3').classList.add('done');
+      document.getElementById('step3').querySelector('.proc-icon').innerHTML = '<svg viewBox="0 0 24 24" fill="white" width="16"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>';
+      document.getElementById('step3').querySelector('.proc-status').textContent = '✓ Fertig';
+      document.getElementById('step4').classList.add('active');
+      document.getElementById('step4').querySelector('.proc-status').textContent = 'Läuft…';
+      document.getElementById('step4').querySelector('.proc-status').style.color = 'var(--yellow)';
+      document.getElementById('step4').querySelector('.proc-icon').style.background = 'var(--yellow)';
+    }, 3000);
+
+    setTimeout(() => {
+      document.getElementById('step4').classList.remove('active');
+      document.getElementById('step4').classList.add('done');
+      document.getElementById('step4').querySelector('.proc-icon').innerHTML = '<svg viewBox="0 0 24 24" fill="white" width="16"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>';
+      document.getElementById('step4').querySelector('.proc-status').textContent = '✓ Fertig';
+    }, 4200);
+
+    setTimeout(() => { goTo('screenResult'); }, 5000);
+  }
+
+  function switchTab(name) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    event.currentTarget.classList.add('active');
+    document.getElementById('tab-' + name).classList.add('active');
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2500);
+  }
+</script>
+</body>
+</html>

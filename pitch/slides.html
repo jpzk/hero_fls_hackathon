@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HERO Scanner – Pitch</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet" />
+  <style>
+    :root { --y:#FFD600; --b:#1A1A1A; --w:#FFFFFF; }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    html,body { width:100%; height:100%; overflow:hidden; font-family:"DM Sans",sans-serif; background:var(--b); }
+
+    .deck { width:100%; height:100%; position:relative; }
+
+    .slide {
+      position:absolute; inset:0;
+      display:flex; flex-direction:column;
+      justify-content:center; align-items:flex-start;
+      padding:80px 110px;
+      opacity:0; pointer-events:none;
+      transform:translateY(20px);
+      transition:opacity .45s ease, transform .45s ease;
+    }
+    .slide.active { opacity:1; pointer-events:all; transform:translateY(0); }
+    .slide.out    { opacity:0; transform:translateY(-20px); }
+    .center { align-items:center; text-align:center; }
+
+    .dark   { background:var(--b); }
+    .yellow { background:var(--y); }
+
+    /* ── FIXED ── */
+    .logo {
+      position:fixed; top:32px; left:48px; z-index:200;
+      font-size:15px; font-weight:800; color:rgba(255,255,255,0.15); letter-spacing:-.3px;
+    }
+    .logo span { color:rgba(255,214,0,0.3); }
+    .logo.light { color:rgba(26,26,26,0.18); }
+    .logo.light span { color:rgba(26,26,26,0.15); }
+
+    .hint { position:fixed; top:34px; right:48px; font-size:11px; color:rgba(255,255,255,0.18); font-weight:500; z-index:200; }
+
+    .nav {
+      position:fixed; bottom:36px; left:50%; transform:translateX(-50%);
+      display:flex; align-items:center; gap:14px;
+      background:rgba(255,255,255,0.06); backdrop-filter:blur(16px);
+      border:1px solid rgba(255,255,255,0.1); border-radius:50px;
+      padding:10px 22px; z-index:200;
+      transition: background .3s, border-color .3s;
+    }
+    .nav-btn {
+      width:34px; height:34px; border-radius:50%; border:none;
+      background:rgba(255,255,255,0.08); color:white; font-size:15px;
+      cursor:pointer; display:flex; align-items:center; justify-content:center;
+      transition:all .2s;
+    }
+    
+    .nav-btn:hover { background:var(--y); color:var(--b); }
+    .dots { display:flex; gap:6px; align-items:center; }
+    .dot { width:6px; height:6px; border-radius:3px; background:rgba(255,255,255,0.2); cursor:pointer; transition:all .25s; }
+    .dot.on { background:var(--y); width:20px; }
+    .ctr { font-size:12px; font-weight:600; color:rgba(255,255,255,0.28); min-width:36px; text-align:center; }
+
+    /* ── TYPOGRAPHY ── */
+    .label {
+      font-size:12px; font-weight:700; letter-spacing:.12em; text-transform:uppercase;
+      color:var(--y); margin-bottom:22px;
+      display:flex; align-items:center; gap:10px;
+    }
+    .label::before { content:''; width:24px; height:3px; background:var(--y); border-radius:2px; }
+    .label.dark-text { color:rgba(26,26,26,0.4); }
+    .label.dark-text::before { background:rgba(26,26,26,0.3); }
+
+    .h1 {
+      font-size:clamp(56px,7.5vw,108px);
+      font-weight:800; color:var(--w); line-height:1.0;
+      margin-bottom:28px;
+    }
+    .h1 em { color:var(--y); font-style:normal; }
+    .h1.dark-text { color:var(--b); }
+    .h1.dark-text em { color:rgba(26,26,26,0.3); }
+
+    .h2 {
+      font-size:clamp(36px,5vw,72px);
+      font-weight:800; color:var(--w); line-height:1.05;
+      margin-bottom:24px;
+    }
+    .h2 em { color:var(--y); font-style:normal; }
+    .h2.dark-text { color:var(--b); }
+
+    .sub {
+      font-size:clamp(17px,1.8vw,22px);
+      color:rgba(255,255,255,0.45); line-height:1.65;
+      max-width:560px;
+    }
+    .sub.dark-text { color:rgba(26,26,26,0.5); }
+    .sub strong { color:var(--w); font-weight:700; }
+    .sub.dark-text strong { color:var(--b); }
+
+    /* stat */
+    .stat { font-size:clamp(110px,18vw,200px); font-weight:800; color:var(--b); line-height:1; }
+    .stat-unit { font-size:clamp(50px,8vw,96px); }
+    .stat-desc { font-size:clamp(18px,2vw,26px); color:rgba(26,26,26,0.5); font-weight:600; margin-top:14px; max-width:460px; line-height:1.5; }
+
+    /* points */
+    .points { display:flex; flex-direction:column; gap:14px; margin-top:36px; }
+    .point {
+      display:flex; align-items:center; gap:14px;
+      font-size:clamp(16px,1.6vw,20px); font-weight:600; color:rgba(255,255,255,0.7);
+    }
+    .point .dot-y { width:8px; height:8px; border-radius:50%; background:var(--y); flex-shrink:0; }
+    .point.dark-text { color:rgba(26,26,26,0.65); }
+    .point.dark-text .dot-y { background:var(--b); }
+
+    /* badge */
+    .uc-badge {
+      display:inline-flex; align-items:center; gap:8px;
+      background:var(--y); color:var(--b);
+      font-size:12px; font-weight:800; letter-spacing:.06em; text-transform:uppercase;
+      padding:6px 16px; border-radius:50px; margin-bottom:20px;
+    }
+    .uc-badge.inv { background:var(--b); color:var(--y); }
+
+    /* demo btn */
+    .demo-btn {
+      display:inline-flex; align-items:center; gap:12px;
+      background:var(--y); color:var(--b);
+      border:none; border-radius:50px;
+      padding:18px 36px; font-family:"DM Sans",sans-serif;
+      font-size:17px; font-weight:700; cursor:pointer; text-decoration:none;
+      box-shadow:0 8px 32px rgba(0,0,0,0.2); transition:all .2s; margin-top:40px;
+    }
+    .demo-btn:hover { transform:translateY(-2px); }
+    .demo-btn svg { width:18px; height:18px; }
+
+    /* final btns */
+    .btns { display:flex; gap:14px; margin-top:44px; }
+    .btn-y {
+      display:inline-flex; align-items:center; gap:10px;
+      background:var(--y); color:var(--b); border:none; border-radius:50px;
+      padding:18px 36px; font-family:"DM Sans",sans-serif;
+      font-size:16px; font-weight:700; cursor:pointer; text-decoration:none;
+      box-shadow:0 6px 24px rgba(255,214,0,0.3); transition:all .2s;
+    }
+    .btn-y:hover { transform:translateY(-2px); }
+    .btn-ghost {
+      display:inline-flex; align-items:center; gap:10px;
+      background:transparent; color:rgba(255,255,255,0.45);
+      border:1px solid rgba(255,255,255,0.15); border-radius:50px;
+      padding:18px 36px; font-family:"DM Sans",sans-serif;
+      font-size:16px; font-weight:600; cursor:pointer; text-decoration:none; transition:all .2s;
+    }
+    .btn-ghost:hover { color:white; border-color:rgba(255,255,255,0.3); }
+
+    /* scan anim */
+    .scan-anim { position:absolute; right:110px; top:50%; transform:translateY(-50%); width:260px; height:260px; display:flex; align-items:center; justify-content:center; }
+    .ring { position:absolute; border-radius:50%; border:1px solid rgba(255,214,0,0.15); animation:expand 3s ease-out infinite; }
+    @keyframes expand { 0%{width:80px;height:80px;opacity:.7} 100%{width:260px;height:260px;opacity:0} }
+    .ring:nth-child(2){animation-delay:1s} .ring:nth-child(3){animation-delay:2s}
+    .core { width:80px;height:80px;border-radius:50%;background:rgba(255,214,0,0.1);border:2px solid rgba(255,214,0,0.4);display:flex;align-items:center;justify-content:center;position:relative;z-index:1; }
+    .core svg { width:34px;height:34px; }
+
+    /* deco blob */
+    .blob { position:absolute;border-radius:50%;pointer-events:none;filter:blur(100px); }
+  </style>
+</head>
+<body>
+
+<div class="logo" id="logo">HERO<span>.</span></div>
+<div class="hint">← →</div>
+<div class="deck">
+
+  <!-- 1 TITLE -->
+  <div class="slide dark active">
+    <div class="blob" style="width:500px;height:500px;background:rgba(255,214,0,0.06);top:-150px;right:-100px;"></div>
+    <div class="h1">We don't build<br/>a feature.<br/><em>We build<br/>the future.</em></div>
+  </div>
+
+  <!-- 2 PROBLEM -->
+  <div class="slide yellow">
+    <div class="h2 dark-text">Craftsmen don't have<br/>a <em style="color:rgba(26,26,26,0.35)">technology</em> problem.<br/>They have an<br/>information problem.</div>
+  </div>
+
+  <!-- 3 DEMO -->
+  <div class="slide dark">
+    <div class="blob" style="width:500px;height:500px;background:rgba(255,214,0,0.05);top:-100px;right:-100px;"></div>
+    <div class="h1">Point.<br/>Scan.<br/><em>Done.</em></div>
+    <a href="https://frontend-ten-pi-37.vercel.app" target="_blank" class="demo-btn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      See it live
+    </a>
+  </div>
+
+  <!-- 4 UC1 -->
+  <div class="slide yellow">
+    <div class="uc-badge inv">Use Case 01</div>
+    <div class="h1 dark-text">The craftsman<br/>never has to<br/><em style="color:rgba(26,26,26,0.35)">show up.</em></div>
+  </div>
+
+  <!-- 5 UC2 -->
+  <div class="slide dark">
+    <div class="uc-badge">Use Case 02</div>
+    <div class="h1">The job's not done<br/>when you say so.<br/><em>The scan confirms it.</em></div>
+  </div>
+
+  <!-- 6 UC3 -->
+  <div class="slide yellow">
+    <div class="uc-badge inv">Use Case 03</div>
+    <div class="h1 dark-text">Your expertise.<br/><em style="color:rgba(26,26,26,0.35)">Built into</em><br/>every scan.</div>
+  </div>
+
+  <!-- 7 INFINITY -->
+  <div class="slide dark center" style="overflow:hidden;">
+    <div style="position:absolute;font-size:80vw;font-weight:400;color:var(--y);opacity:0.1;line-height:1;font-family:'DM Sans',sans-serif;transform:scaleX(1.15);pointer-events:none;user-select:none;">∞</div>
+    <div style="position:relative;z-index:2;text-align:center;">
+      <div style="font-size:clamp(52px,7vw,96px);font-weight:800;color:var(--w);line-height:1.05;">One scan.</div>
+      <div style="font-size:clamp(52px,7vw,96px);font-weight:800;color:var(--y);line-height:1.05;">Unlimited use cases.</div>
+    </div>
+  </div>
+
+  <!-- 8 FINAL -->
+  <div class="slide yellow center">
+    <div class="h1 dark-text" style="font-size:clamp(80px,14vw,180px);margin:0;">Thanks.</div>
+  </div>
+
+</div>
+
+<!-- Nav -->
+<div class="nav" id="nav">
+  <button class="nav-btn" onclick="prev()">←</button>
+  <div class="dots" id="dots"></div>
+  <div class="ctr" id="ctr">1 / 8</div>
+  <button class="nav-btn" onclick="next()">→</button>
+</div>
+
+<script>
+  const slides = [...document.querySelectorAll('.slide')];
+  const total = slides.length;
+  let cur = 0;
+
+  const dotsEl = document.getElementById('dots');
+  slides.forEach((_,i) => {
+    const d = document.createElement('div');
+    d.className = 'dot'+(i===0?' on':'');
+    d.onclick = () => goTo(i);
+    dotsEl.appendChild(d);
+  });
+
+  function goTo(n) {
+    if (n === cur) return;
+    slides[cur].classList.remove('active');
+    slides[cur].classList.add('out');
+    const prev = cur;
+    setTimeout(() => slides[prev].classList.remove('out'), 500);
+    cur = n;
+    slides[cur].classList.add('active');
+
+    dotsEl.querySelectorAll('.dot').forEach((d,i) => d.classList.toggle('on', i===cur));
+    document.getElementById('ctr').textContent = (cur+1)+' / '+total;
+
+    const isYellow = slides[cur].classList.contains('yellow');
+    const logo = document.getElementById('logo');
+    logo.className = 'logo'+(isYellow?' light':'');
+
+    const nav = document.getElementById('nav');
+    nav.style.background = isYellow ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)';
+    nav.style.borderColor = isYellow ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)';
+    nav.querySelectorAll('.nav-btn').forEach(b => {
+      b.style.color = isYellow ? '#1A1A1A' : 'white';
+      b.style.background = isYellow ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)';
+    });
+    document.getElementById('ctr').style.color = isYellow ? 'rgba(26,26,26,0.3)' : 'rgba(255,255,255,0.28)';
+    dotsEl.querySelectorAll('.dot').forEach(d => {
+      d.style.background = d.classList.contains('on')
+        ? (isYellow ? '#1A1A1A' : '#FFD600')
+        : (isYellow ? 'rgba(0,0,0,0.18)' : 'rgba(255,255,255,0.2)');
+      d.style.width = d.classList.contains('on') ? '20px' : '6px';
+    });
+  }
+
+  function next() { if (cur < total-1) goTo(cur+1); }
+  function prev() { if (cur > 0) goTo(cur-1); }
+
+  document.addEventListener('keydown', e => {
+    if (e.key==='ArrowRight'||e.key===' ') { e.preventDefault(); next(); }
+    if (e.key==='ArrowLeft') prev();
+  });
+
+  let tx = 0;
+  document.addEventListener('touchstart', e => tx=e.touches[0].clientX, {passive:true});
+  document.addEventListener('touchend', e => { const dx=tx-e.changedTouches[0].clientX; if(Math.abs(dx)>50) dx>0?next():prev(); });
+</script>
+</body>
+</html>

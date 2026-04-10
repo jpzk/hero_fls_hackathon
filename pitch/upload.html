@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HERO Scanner – Upload Video</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --yellow: #FFD600;
+      --black: #1A1A1A;
+      --white: #FFFFFF;
+      --gray-light: #F5F5F5;
+      --gray-medium: #E8E8E8;
+      --gray-dark: #4A4A4A;
+      --green: #22C55E;
+      --font: "DM Sans", sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font);
+      background: var(--black);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 0 0 60px;
+    }
+
+    /* Header */
+    .header {
+      width: 100%;
+      max-width: 480px;
+      padding: 24px 24px 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .logo {
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--white);
+      letter-spacing: -0.5px;
+    }
+    .logo span { color: var(--yellow); }
+    .powered {
+      font-size: 11px;
+      color: rgba(255,255,255,0.35);
+      font-weight: 500;
+    }
+
+    /* Hero */
+    .hero {
+      width: 100%;
+      max-width: 480px;
+      padding: 36px 24px 0;
+      text-align: center;
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: rgba(255,214,0,0.12);
+      border: 1px solid rgba(255,214,0,0.25);
+      color: var(--yellow);
+      font-size: 12px;
+      font-weight: 700;
+      padding: 7px 16px;
+      border-radius: 50px;
+      margin-bottom: 20px;
+      letter-spacing: 0.04em;
+    }
+    .hero-badge-dot {
+      width: 6px; height: 6px;
+      background: var(--yellow);
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.3} }
+    .hero h1 {
+      font-size: 30px;
+      font-weight: 800;
+      color: var(--white);
+      line-height: 1.2;
+      margin-bottom: 14px;
+    }
+    .hero h1 span { color: var(--yellow); }
+    .hero p {
+      font-size: 15px;
+      color: rgba(255,255,255,0.55);
+      line-height: 1.65;
+    }
+
+    /* Steps */
+    .steps {
+      width: 100%;
+      max-width: 480px;
+      padding: 28px 24px 0;
+      display: flex;
+      justify-content: center;
+      gap: 0;
+    }
+    .step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      flex: 1;
+      position: relative;
+    }
+    .step:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      top: 16px;
+      left: calc(50% + 16px);
+      right: calc(-50% + 16px);
+      height: 2px;
+      background: rgba(255,255,255,0.1);
+    }
+    .step-num {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.12);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px;
+      font-weight: 700;
+      color: rgba(255,255,255,0.4);
+      position: relative;
+      z-index: 1;
+    }
+    .step.active .step-num {
+      background: var(--yellow);
+      border-color: var(--yellow);
+      color: var(--black);
+    }
+    .step.done .step-num { background: var(--green); border-color: var(--green); color: white; }
+    .step-label { font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.35); text-align: center; }
+    .step.active .step-label { color: var(--yellow); }
+    .step.done .step-label { color: var(--green); }
+
+    /* Upload Card */
+    .upload-card {
+      width: 100%;
+      max-width: 480px;
+      padding: 20px 24px 0;
+    }
+
+    /* State: Upload */
+    #stateUpload { display: flex; flex-direction: column; gap: 14px; }
+
+    .drop-zone {
+      border: 2px dashed rgba(255,214,0,0.3);
+      border-radius: 20px;
+      padding: 40px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+    .drop-zone::before {
+      content:'';
+      position:absolute;inset:0;
+      background:radial-gradient(ellipse at 50% 30%, rgba(255,214,0,0.04) 0%, transparent 70%);
+    }
+    .drop-zone:hover, .drop-zone.over {
+      border-color: var(--yellow);
+      background: rgba(255,214,0,0.03);
+    }
+    .dz-icon {
+      width: 64px; height: 64px;
+      background: rgba(255,214,0,0.1);
+      border-radius: 18px;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 16px;
+      border: 1px solid rgba(255,214,0,0.2);
+    }
+    .dz-icon svg { width: 28px; height: 28px; }
+    .dz-title { font-size: 17px; font-weight: 700; color: var(--white); margin-bottom: 8px; }
+    .dz-sub { font-size: 13px; color: rgba(255,255,255,0.4); line-height: 1.5; }
+    .dz-formats { display:flex; gap:8px; justify-content:center; margin-top:14px; flex-wrap:wrap; }
+    .dz-chip {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: rgba(255,255,255,0.45);
+      font-size: 11px; font-weight: 600;
+      padding: 4px 10px; border-radius: 50px;
+    }
+
+    .divider {
+      display:flex;align-items:center;gap:12px;
+    }
+    .divider-line { flex:1;height:1px;background:rgba(255,255,255,0.08); }
+    .divider span { font-size:12px;color:rgba(255,255,255,0.25);font-weight:600; }
+
+    .gallery-btn {
+      width: 100%;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 50px;
+      padding: 16px;
+      font-family: var(--font);
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--white);
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      transition: all 0.2s;
+    }
+    .gallery-btn:hover { background: rgba(255,255,255,0.11); }
+    .gallery-btn svg { width: 18px; height: 18px; }
+
+    /* Hidden file input */
+    #fileInput { display: none; }
+
+    /* State: Preview */
+    #statePreview { display: none; flex-direction: column; gap: 14px; }
+
+    .video-preview-box {
+      background: #111;
+      border-radius: 16px;
+      aspect-ratio: 16/9;
+      display: flex; align-items: center; justify-content: center;
+      position: relative;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .vp-grid {
+      position:absolute;inset:0;opacity:.03;
+      background-image:
+        repeating-linear-gradient(0deg,transparent,transparent 20px,rgba(255,255,255,.8) 20px,rgba(255,255,255,.8) 21px),
+        repeating-linear-gradient(90deg,transparent,transparent 20px,rgba(255,255,255,.8) 20px,rgba(255,255,255,.8) 21px);
+    }
+    .vp-play {
+      width: 56px; height: 56px;
+      background: rgba(255,214,0,0.9);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      position: relative; z-index: 1;
+    }
+    .vp-play svg { width: 22px; height: 22px; margin-left: 3px; }
+    .vp-duration {
+      position: absolute; bottom: 10px; right: 10px;
+      background: rgba(0,0,0,0.7);
+      color: white; font-size: 11px; font-weight: 700;
+      padding: 3px 8px; border-radius: 6px;
+    }
+
+    .file-info {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 14px;
+      padding: 14px 16px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .fi-icon {
+      width: 40px; height: 40px;
+      background: rgba(255,214,0,0.12);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .fi-icon svg { width: 20px; height: 20px; }
+    .fi-name { font-size: 14px; font-weight: 700; color: var(--white); }
+    .fi-meta { font-size: 12px; color: rgba(255,255,255,0.4); margin-top: 2px; }
+    .fi-check {
+      margin-left: auto;
+      width: 28px; height: 28px;
+      background: var(--green);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .fi-check svg { width: 14px; height: 14px; }
+
+    .analyse-btn {
+      width: 100%;
+      background: var(--yellow);
+      color: var(--black);
+      border: none;
+      border-radius: 50px;
+      padding: 18px;
+      font-family: var(--font);
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      box-shadow: 0 4px 24px rgba(255,214,0,0.3);
+      transition: all 0.2s;
+    }
+    .analyse-btn:active { transform: scale(0.98); }
+    .analyse-btn svg { width: 18px; height: 18px; }
+
+    .change-btn {
+      width: 100%;
+      background: transparent;
+      color: rgba(255,255,255,0.4);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 50px;
+      padding: 14px;
+      font-family: var(--font);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    /* State: Processing */
+    #stateProcessing {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+      padding-top: 16px;
+    }
+    .proc-ring {
+      width: 100px; height: 100px;
+      position: relative;
+    }
+    .proc-ring svg { width: 100%; height: 100%; animation: spin 2s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .proc-ring-center {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .proc-steps { width: 100%; display: flex; flex-direction: column; gap: 10px; }
+    .ps {
+      display: flex; align-items: center; gap: 12px;
+      padding: 13px 15px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 12px;
+      transition: all 0.3s;
+    }
+    .ps.active { background: rgba(255,214,0,0.08); border-color: rgba(255,214,0,0.2); }
+    .ps.done { background: rgba(34,197,94,0.08); border-color: rgba(34,197,94,0.15); }
+    .ps-dot {
+      width: 28px; height: 28px; border-radius: 50%;
+      background: rgba(255,255,255,0.08);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .ps.active .ps-dot { background: var(--yellow); }
+    .ps.done .ps-dot { background: var(--green); }
+    .ps-dot svg { width: 13px; height: 13px; }
+    .ps-label { font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.8); }
+    .ps-status { margin-left: auto; font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.3); }
+    .ps.active .ps-status { color: var(--yellow); }
+    .ps.done .ps-status { color: var(--green); }
+
+    /* State: Done */
+    #stateDone {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 0;
+      padding-top: 20px;
+    }
+    .done-icon {
+      width: 72px; height: 72px;
+      background: var(--green);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 20px;
+      box-shadow: 0 0 0 12px rgba(34,197,94,0.1);
+    }
+    .done-icon svg { width: 34px; height: 34px; }
+    .done-title { font-size: 24px; font-weight: 800; color: var(--white); margin-bottom: 10px; }
+    .done-sub { font-size: 14px; color: rgba(255,255,255,0.5); line-height: 1.65; margin-bottom: 28px; }
+
+    /* Result preview cards */
+    .result-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      width: 100%;
+      margin-bottom: 24px;
+    }
+    .result-mini {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 14px;
+      padding: 14px;
+      text-align: left;
+    }
+    .result-mini-label { font-size: 11px; color: rgba(255,255,255,0.4); margin-bottom: 4px; }
+    .result-mini-value { font-size: 18px; font-weight: 800; color: var(--yellow); }
+    .result-mini-unit { font-size: 12px; color: rgba(255,255,255,0.4); }
+
+    .view-result-btn {
+      width: 100%;
+      background: var(--yellow);
+      color: var(--black);
+      border: none;
+      border-radius: 50px;
+      padding: 18px;
+      font-family: var(--font);
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 4px 24px rgba(255,214,0,0.3);
+    }
+
+    /* Customer name banner */
+    #customerBanner {
+      display: none;
+      width: 100%;
+      max-width: 480px;
+      padding: 16px 24px 0;
+    }
+    .cust-banner {
+      background: rgba(255,214,0,0.08);
+      border: 1px solid rgba(255,214,0,0.2);
+      border-radius: 14px;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .cust-banner svg { width: 16px; height: 16px; flex-shrink: 0; }
+    .cust-banner span { font-size: 13px; font-weight: 600; color: var(--yellow); }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="logo">HERO<span>.</span></div>
+    <div class="powered">Scanner</div>
+  </div>
+
+  <!-- Customer greeting banner (shown if name param exists) -->
+  <div id="customerBanner">
+    <div class="cust-banner">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#FFD600" stroke-width="2" stroke-linecap="round">
+        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
+      </svg>
+      <span id="customerGreeting"></span>
+    </div>
+  </div>
+
+  <!-- Hero Text -->
+  <div class="hero">
+    <div class="hero-badge">
+      <span class="hero-badge-dot"></span>
+      AI-powered Analysis
+    </div>
+    <h1>Upload your<br/><span>site video</span></h1>
+    <p>Upload a short video of the component. Our AI detects dimensions, materials and costs automatically.</p>
+  </div>
+
+  <!-- Steps -->
+  <div class="steps">
+    <div class="step active" id="step-upload">
+      <div class="step-num">1</div>
+      <div class="step-label">Upload</div>
+    </div>
+    <div class="step" id="step-analyse">
+      <div class="step-num">2</div>
+      <div class="step-label">Analyse</div>
+    </div>
+    <div class="step" id="step-result">
+      <div class="step-num">3</div>
+      <div class="step-label">Result</div>
+    </div>
+  </div>
+
+  <!-- Upload Card -->
+  <div class="upload-card">
+
+    <!-- STATE 1: Upload -->
+    <div id="stateUpload">
+      <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+        <div class="dz-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#FFD600" stroke-width="2" stroke-linecap="round">
+            <polyline points="16 16 12 12 8 16"/>
+            <line x1="12" y1="12" x2="12" y2="21"/>
+            <path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3"/>
+          </svg>
+        </div>
+        <div class="dz-title">Drop video here</div>
+        <div class="dz-sub">or tap to select from your device</div>
+        <div class="dz-formats">
+          <span class="dz-chip">MP4</span>
+          <span class="dz-chip">MOV</span>
+          <span class="dz-chip">AVI</span>
+          <span class="dz-chip">max 2 GB</span>
+        </div>
+      </div>
+
+      <div class="divider">
+        <div class="divider-line"></div>
+        <span>or</span>
+        <div class="divider-line"></div>
+      </div>
+
+      <button class="gallery-btn" onclick="document.getElementById('fileInput').click()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <rect x="3" y="3" width="18" height="18" rx="2"/>
+          <circle cx="8.5" cy="8.5" r="1.5"/>
+          <polyline points="21 15 16 10 5 21"/>
+        </svg>
+        Choose from Gallery
+      </button>
+
+      <input type="file" id="fileInput" accept="video/*" onchange="fileSelected(this)" />
+    </div>
+
+    <!-- STATE 2: Preview -->
+    <div id="statePreview">
+      <div class="video-preview-box">
+        <div class="vp-grid"></div>
+        <div class="vp-play">
+          <svg viewBox="0 0 24 24" fill="#1A1A1A"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        </div>
+        <div class="vp-duration" id="vp-dur">0:00</div>
+      </div>
+      <div class="file-info">
+        <div class="fi-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#FFD600" stroke-width="2" stroke-linecap="round">
+            <polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/>
+          </svg>
+        </div>
+        <div>
+          <div class="fi-name" id="fi-name">video.mp4</div>
+          <div class="fi-meta" id="fi-meta">0 MB</div>
+        </div>
+        <div class="fi-check">
+          <svg viewBox="0 0 24 24" fill="white"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
+        </div>
+      </div>
+      <button class="analyse-btn" onclick="startAnalysis()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" stroke-width="2.5" stroke-linecap="round">
+          <path d="M9.5 6.5v3h-3v-3h3M11 5H5v6h6V5zm-1.5 9.5v3h-3v-3h3M11 13H5v6h6v-6zm6.5-6.5v3h-3v-3h3M19 5h-6v6h6V5z"/>
+        </svg>
+        Analyse Video
+      </button>
+      <button class="change-btn" onclick="resetUpload()">Choose different video</button>
+    </div>
+
+    <!-- STATE 3: Processing -->
+    <div id="stateProcessing">
+      <div class="proc-ring">
+        <svg viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="44" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="8"/>
+          <circle cx="50" cy="50" r="44" fill="none" stroke="#FFD600" stroke-width="8"
+            stroke-dasharray="170 110" stroke-linecap="round"/>
+        </svg>
+        <div class="proc-ring-center">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#FFD600" stroke-width="2" stroke-linecap="round" width="28">
+            <path d="M9.5 6.5v3h-3v-3h3M11 5H5v6h6V5zm-1.5 9.5v3h-3v-3h3M11 13H5v6h6v-6zm6.5-6.5v3h-3v-3h3M19 5h-6v6h6V5z"/>
+          </svg>
+        </div>
+      </div>
+      <div style="text-align:center;">
+        <div style="font-size:20px;font-weight:800;color:white;margin-bottom:6px;">Analysing video…</div>
+        <div style="font-size:14px;color:rgba(255,255,255,0.4);">AI is processing your footage</div>
+      </div>
+      <div class="proc-steps" style="width:100%;">
+        <div class="ps done" id="ps1">
+          <div class="ps-dot"><svg viewBox="0 0 24 24" fill="white"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg></div>
+          <div class="ps-label">Video uploaded</div>
+          <div class="ps-status">✓ Done</div>
+        </div>
+        <div class="ps active" id="ps2">
+          <div class="ps-dot"><svg viewBox="0 0 24 24" fill="#1A1A1A" width="13"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67V7z"/></svg></div>
+          <div class="ps-label">3D Reconstruction</div>
+          <div class="ps-status">Running…</div>
+        </div>
+        <div class="ps" id="ps3">
+          <div class="ps-dot"><svg viewBox="0 0 24 24" fill="rgba(255,255,255,0.3)" width="13"><rect x="3" y="3" width="18" height="18" rx="2"/></svg></div>
+          <div class="ps-label">Material detection</div>
+          <div class="ps-status">Pending</div>
+        </div>
+        <div class="ps" id="ps4">
+          <div class="ps-dot"><svg viewBox="0 0 24 24" fill="rgba(255,255,255,0.3)" width="13"><line x1="12" y1="1" x2="12" y2="23" stroke="rgba(255,255,255,0.3)" stroke-width="2"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" stroke="rgba(255,255,255,0.3)" stroke-width="2" fill="none"/></svg></div>
+          <div class="ps-label">Cost calculation</div>
+          <div class="ps-status">Pending</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STATE 4: Done -->
+    <div id="stateDone">
+      <div class="done-icon">
+        <svg viewBox="0 0 24 24" fill="white"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
+      </div>
+      <div class="done-title">Analysis Complete!</div>
+      <div class="done-sub">Your component has been fully analysed.<br/>Here's a preview of the results:</div>
+      <div class="result-grid">
+        <div class="result-mini">
+          <div class="result-mini-label">Length</div>
+          <div class="result-mini-value">6.400 <span class="result-mini-unit">mm</span></div>
+        </div>
+        <div class="result-mini">
+          <div class="result-mini-label">Weight</div>
+          <div class="result-mini-value">268 <span class="result-mini-unit">kg</span></div>
+        </div>
+        <div class="result-mini">
+          <div class="result-mini-label">Materials</div>
+          <div class="result-mini-value">4 <span class="result-mini-unit">items</span></div>
+        </div>
+        <div class="result-mini">
+          <div class="result-mini-label">Est. Cost</div>
+          <div class="result-mini-value">€2,340</div>
+        </div>
+      </div>
+      <button class="view-result-btn" onclick="window.location.href='index.html#result'">
+        View Full Report →
+      </button>
+    </div>
+
+  </div><!-- /upload-card -->
+
+  <script>
+    // ── Read URL params ──────────────────────────────────────────────
+    const params = new URLSearchParams(window.location.search);
+    const customerName = params.get('name');
+    if (customerName) {
+      document.getElementById('customerBanner').style.display = 'block';
+      document.getElementById('customerGreeting').textContent =
+        'Hi ' + decodeURIComponent(customerName) + ' — your personal upload link is ready.';
+    }
+
+    // ── File selected ────────────────────────────────────────────────
+    function fileSelected(input) {
+      const file = input.files[0];
+      if (!file) return;
+      const sizeMB = (file.size / 1024 / 1024).toFixed(1);
+      document.getElementById('fi-name').textContent = file.name;
+      document.getElementById('fi-meta').textContent = sizeMB + ' MB · video';
+      document.getElementById('vp-dur').textContent = '0:' + Math.floor(Math.random()*50+10);
+      showState('statePreview');
+      setStep(2);
+    }
+
+    function resetUpload() {
+      document.getElementById('fileInput').value = '';
+      showState('stateUpload');
+      setStep(1);
+    }
+
+    // ── Analysis simulation ─────────────────────────────────────────
+    function startAnalysis() {
+      showState('stateProcessing');
+      setStep(2);
+
+      const complete = (id, nextId) => {
+        const el = document.getElementById(id);
+        el.classList.remove('active'); el.classList.add('done');
+        el.querySelector('.ps-dot').innerHTML = '<svg viewBox="0 0 24 24" fill="white"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>';
+        el.querySelector('.ps-status').textContent = '✓ Done';
+        if (nextId) {
+          const nx = document.getElementById(nextId);
+          nx.classList.add('active');
+          nx.querySelector('.ps-status').textContent = 'Running…';
+          nx.querySelector('.ps-status').style.color = '#FFD600';
+          nx.querySelector('.ps-dot').style.background = '#FFD600';
+        }
+      };
+
+      setTimeout(() => complete('ps2', 'ps3'), 1800);
+      setTimeout(() => complete('ps3', 'ps4'), 3200);
+      setTimeout(() => complete('ps4', null), 4600);
+      setTimeout(() => { showState('stateDone'); setStep(3); }, 5400);
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────
+    function showState(id) {
+      ['stateUpload','statePreview','stateProcessing','stateDone']
+        .forEach(s => document.getElementById(s).style.display = 'none');
+      document.getElementById(id).style.display = 'flex';
+    }
+
+    function setStep(n) {
+      ['step-upload','step-analyse','step-result'].forEach((id, i) => {
+        const el = document.getElementById(id);
+        el.className = 'step' + (i+1 < n ? ' done' : i+1 === n ? ' active' : '');
+        if (i+1 < n) el.querySelector('.step-num').innerHTML =
+          '<svg viewBox="0 0 24 24" fill="white" width="14"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>';
+        else el.querySelector('.step-num').textContent = i+1;
+      });
+    }
+
+    // ── Drag & drop ──────────────────────────────────────────────────
+    const dz = document.getElementById('dropZone');
+    dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
+    dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+    dz.addEventListener('drop', e => {
+      e.preventDefault(); dz.classList.remove('over');
+      const file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith('video/')) {
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        document.getElementById('fileInput').files = dt.files;
+        fileSelected(document.getElementById('fileInput'));
+      }
+    });
+  </script>
+</body>
+</html>
