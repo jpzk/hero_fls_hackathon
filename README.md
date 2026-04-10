@@ -1,6 +1,8 @@
 # Hero FLS AI Hackathon submission
 
-Team: Ipad Builders
+**Company:** https://hero-software.de/
+
+**Team:** Ipad Builders
 
 ## Architecture & AI approach
 
